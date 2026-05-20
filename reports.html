@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link active">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <h1>Environmental Reports - Braybrook</h1>
+
+            <!-- Report Generation Section -->
+            <div class="report-section">
+                <h2>Generate Report</h2>
+                <div class="report-controls">
+                    <div class="control-group">
+                        <label for="reportSite">Monitoring Site:</label>
+                        <select id="reportSite">
+                            <option value="all">All Sites</option>
+                            <option value="north">North Braybrook</option>
+                            <option value="central">Central Braybrook</option>
+                            <option value="south">South Braybrook</option>
+                            <option value="east">East Braybrook</option>
+                            <option value="west">West Braybrook</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="reportStartDate">Start Date:</label>
+                        <input type="date" id="reportStartDate">
+                    </div>
+                    <div class="control-group">
+                        <label for="reportEndDate">End Date:</label>
+                        <input type="date" id="reportEndDate">
+                    </div>
+                    <button class="btn-primary" id="generateReportBtn">Generate Report</button>
+                </div>
+            </div>
+
+            <!-- Report Summary Section -->
+            <div id="reportSummary" class="report-summary" style="display:none;">
+                <h2>Report Summary</h2>
+
+                <!-- High Risk Days -->
+                <div class="report-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> High-Risk Days</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul id="highRiskDays">
+                            <!-- Populated by JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Peak Pollution Periods -->
+                <div class="report-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-wind"></i> Peak Pollution Periods</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Average PM2.5</th>
+                                    <th>Average NO₂</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pollutionTable">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Peak Noise Periods -->
+                <div class="report-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-volume-high"></i> Peak Noise Periods</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Average Noise Level</th>
+                                    <th>Peak Value</th>
+                                    <th>Risk Level</th>
+                                </tr>
+                            </thead>
+                            <tbody id="noiseTable">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Weather Context -->
+                <div class="report-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-cloud"></i> Weather & Traffic Context</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Average Temperature:</strong> <span id="avgTemp">18°C</span></p>
+                        <p><strong>Dominant Wind Direction:</strong> <span id="windDirection">Northeast</span></p>
+                        <p><strong>Rainfall:</strong> <span id="rainfall">2.5mm</span></p>
+                        <p><strong>Average Traffic Density:</strong> <span id="trafficDensity">Moderate</span></p>
+                        <p><strong>Peak Traffic Hours:</strong> <span id="peakHours">07:00-09:00, 17:00-19:00</span></p>
+                    </div>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="export-buttons">
+                    <button class="btn-primary" id="exportPdfBtn">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                    <button class="btn-secondary" id="exportCsvBtn">
+                        <i class="fas fa-file-csv"></i> Export as CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Help Text -->
+            <div class="help-section">
+                <p><strong>Note:</strong> This is a frontend prototype. Export functions are placeholders. In the live system, these will generate real PDF/CSV files from the backend API.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+        </div>
+    </footer>
+
+    <script src="js/mockData.js"></script>
+    <script src="js/main.js"></script>
+    <script>
+        // Reports page specific functionality
+        document.getElementById('generateReportBtn').addEventListener('click', function() {
+            const site = document.getElementById('reportSite').value;
+            const startDate = document.getElementById('reportStartDate').value;
+            const endDate = document.getElementById('reportEndDate').value;
+
+            if (!startDate || !endDate) {
+                alert('Please select both start and end dates');
+                return;
+            }
+
+            // Display report summary
+            document.getElementById('reportSummary').style.display = 'block';
+
+            // Generate mock high-risk days
+            const highRiskDays = [
+                { date: '2025-05-15', reason: 'PM2.5 exceeded 75 μg/m³', value: '82 μg/m³' },
+                { date: '2025-05-18', reason: 'Noise level exceeded 80 dB(A)', value: '85 dB(A)' },
+                { date: '2025-05-20', reason: 'NO₂ exceeded safe levels', value: '68 ppb' }
+            ];
+
+            document.getElementById('highRiskDays').innerHTML = highRiskDays
+                .map(day => `<li><strong>${day.date}</strong> - ${day.reason} (${day.value})</li>`)
+                .join('');
+
+            // Generate mock pollution periods
+            const pollutionPeriods = [
+                { period: '08:00-09:00', pm25: '58', no2: '52', status: 'High' },
+                { period: '17:00-19:00', pm25: '65', no2: '58', status: 'High' },
+                { period: '20:00-21:00', pm25: '48', no2: '42', status: 'Moderate' }
+            ];
+
+            document.getElementById('pollutionTable').innerHTML = pollutionPeriods
+                .map(period => `
+                    <tr>
+                        <td>${period.period}</td>
+                        <td>${period.pm25}</td>
+                        <td>${period.no2}</td>
+                        <td><span class="status-badge status-${period.status.toLowerCase()}">${period.status}</span></td>
+                    </tr>
+                `)
+                .join('');
+
+            // Generate mock noise periods
+            const noisePeriods = [
+                { period: '07:00-09:00', avg: '78', peak: '85', risk: 'High' },
+                { period: '17:00-19:00', avg: '76', peak: '82', risk: 'High' },
+                { period: '22:00-23:00', avg: '62', peak: '68', risk: 'Moderate' }
+            ];
+
+            document.getElementById('noiseTable').innerHTML = noisePeriods
+                .map(period => `
+                    <tr>
+                        <td>${period.period}</td>
+                        <td>${period.avg} dB(A)</td>
+                        <td>${period.peak} dB(A)</td>
+                        <td><span class="status-badge status-${period.risk.toLowerCase()}">${period.risk}</span></td>
+                    </tr>
+                `)
+                .join('');
+
+            // Scroll to report
+            document.getElementById('reportSummary').scrollIntoView({ behavior: 'smooth' });
+        });
+
+        // Export buttons - Frontend only placeholders
+        document.getElementById('exportPdfBtn').addEventListener('click', function() {
+            alert('PDF Export Feature\n\nIn the live system, this will:\n1. Fetch report data from backend API\n2. Generate formatted PDF\n3. Download to user device\n\nBackend API endpoint example:\nGET /api/reports/export/pdf?site=...&startDate=...&endDate=...');
+        });
+
+        document.getElementById('exportCsvBtn').addEventListener('click', function() {
+            alert('CSV Export Feature\n\nIn the live system, this will:\n1. Fetch raw measurement data from database\n2. Generate CSV format\n3. Download to user device\n\nBackend API endpoint example:\nGET /api/measurements/export/csv?site=...&startDate=...&endDate=...');
+        });
+
+        // Set default date range to last 7 days
+        const endDate = new Date();
+        const startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 7);
+
+        document.getElementById('reportStartDate').valueAsDate = startDate;
+        document.getElementById('reportEndDate').valueAsDate = endDate;
+    </script>
+</body>
+</html>

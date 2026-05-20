@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Air and Noise Quality Monitoring System - Braybrook</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link active">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Smart Air and Noise Quality Monitoring System</h1>
+            <p>Empowering Braybrook with Real-Time Environmental Data for Smarter Decision Making</p>
+            <div class="hero-buttons">
+                <a href="dashboard.html" class="btn btn-primary">View Dashboard</a>
+                <a href="#about-section" class="btn btn-secondary">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Overview Cards Section -->
+    <section class="overview-section" id="about-section">
+        <div class="container">
+            <h2>System Capabilities</h2>
+            <div class="cards-grid">
+                <!-- Air Quality Card -->
+                <div class="overview-card">
+                    <div class="card-icon air-quality">
+                        <i class="fas fa-wind"></i>
+                    </div>
+                    <h3>Air Quality Monitoring</h3>
+                    <p>Real-time tracking of PM2.5, NO₂, CO₂, and other pollutants across Braybrook. Helps identify pollution hotspots and trends.</p>
+                    <ul class="card-features">
+                        <li><i class="fas fa-check"></i> Real-time sensor data</li>
+                        <li><i class="fas fa-check"></i> Pollutant analysis</li>
+                        <li><i class="fas fa-check"></i> Health impact assessment</li>
+                    </ul>
+                </div>
+
+                <!-- Noise Monitoring Card -->
+                <div class="overview-card">
+                    <div class="card-icon noise">
+                        <i class="fas fa-volume-high"></i>
+                    </div>
+                    <h3>Noise Monitoring</h3>
+                    <p>Track noise pollution levels from traffic and industry. Identify peak noise periods and high-risk areas for targeted interventions.</p>
+                    <ul class="card-features">
+                        <li><i class="fas fa-check"></i> Continuous monitoring</li>
+                        <li><i class="fas fa-check"></i> Peak detection</li>
+                        <li><i class="fas fa-check"></i> Impact mapping</li>
+                    </ul>
+                </div>
+
+                <!-- Weather Analysis Card -->
+                <div class="overview-card">
+                    <div class="card-icon weather">
+                        <i class="fas fa-cloud"></i>
+                    </div>
+                    <h3>Weather Analysis</h3>
+                    <p>Integrate weather data to correlate environmental conditions with pollution levels. Understand seasonal patterns and forecasting.</p>
+                    <ul class="card-features">
+                        <li><i class="fas fa-check"></i> Temperature tracking</li>
+                        <li><i class="fas fa-check"></i> Wind patterns</li>
+                        <li><i class="fas fa-check"></i> Precipitation data</li>
+                    </ul>
+                </div>
+
+                <!-- Traffic Analysis Card -->
+                <div class="overview-card">
+                    <div class="card-icon traffic">
+                        <i class="fas fa-car"></i>
+                    </div>
+                    <h3>Traffic Analysis</h3>
+                    <p>Monitor traffic flow and vehicle density to correlate with air and noise pollution. Support smart transportation planning.</p>
+                    <ul class="card-features">
+                        <li><i class="fas fa-check"></i> Vehicle counting</li>
+                        <li><i class="fas fa-check"></i> Flow analysis</li>
+                        <li><i class="fas fa-check"></i> Congestion mapping</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+            <p>This is a university capstone project prototype. Frontend only - no real backend or database.</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

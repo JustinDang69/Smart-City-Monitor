@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Upload - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link">Reports</a></li>
+                <li><a href="admin.html" class="nav-link active">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <h1>Admin Data Upload - Braybrook</h1>
+
+            <!-- Upload Form Section -->
+            <div class="admin-section">
+                <h2>Upload Environmental Data</h2>
+                <div class="upload-card">
+                    <div class="upload-form">
+                        <div class="form-group">
+                            <label for="datasetType">Dataset Type:</label>
+                            <select id="datasetType">
+                                <option value="">Select Dataset Type</option>
+                                <option value="air-quality">Air Quality Measurements</option>
+                                <option value="noise">Noise Monitoring Data</option>
+                                <option value="weather">Weather Data</option>
+                                <option value="traffic">Traffic Analysis Data</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="fileInput">Upload File (CSV or JSON):</label>
+                            <div class="file-input-wrapper">
+                                <input type="file" id="fileInput" accept=".csv,.json">
+                                <label for="fileInput" class="file-label">
+                                    <i class="fas fa-cloud-upload-alt"></i>
+                                    <span>Click to select file or drag and drop</span>
+                                </label>
+                            </div>
+                            <p class="file-hint">Supported formats: CSV, JSON | Max size: 50MB</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="siteSelect">Monitoring Site:</label>
+                            <select id="siteSelect">
+                                <option value="">Select Site</option>
+                                <option value="north">North Braybrook</option>
+                                <option value="central">Central Braybrook</option>
+                                <option value="south">South Braybrook</option>
+                                <option value="east">East Braybrook</option>
+                                <option value="west">West Braybrook</option>
+                            </select>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn-primary" id="validateBtn">
+                                <i class="fas fa-check-circle"></i> Validate File
+                            </button>
+                            <button class="btn-secondary" id="uploadBtn" disabled>
+                                <i class="fas fa-upload"></i> Upload Dataset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Validation Messages Section -->
+            <div id="validationMessages" style="display:none;" class="validation-section">
+                <h2>Validation Results</h2>
+                <div id="validationContent"></div>
+            </div>
+
+            <!-- Upload Results Table Section -->
+            <div id="uploadResults" style="display:none;" class="results-section">
+                <h2>Upload History</h2>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>File Name</th>
+                                <th>Dataset Type</th>
+                                <th>Site</th>
+                                <th>Rows Detected</th>
+                                <th>Upload Time</th>
+                                <th>Status</th>
+                                <th>Issues Found</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Instructions Section -->
+            <div class="instructions-section">
+                <h2>Upload Instructions</h2>
+                <div class="instruction-card">
+                    <h3><i class="fas fa-file-csv"></i> CSV Format Requirements</h3>
+                    <ul>
+                        <li>First row must contain headers</li>
+                        <li>For air quality: timestamp, site, PM2.5, NO₂, CO₂, temperature</li>
+                        <li>For noise: timestamp, site, noise_level, frequency</li>
+                        <li>For weather: timestamp, site, temperature, humidity, wind_speed</li>
+                        <li>For traffic: timestamp, site, vehicle_count, average_speed</li>
+                        <li>Timestamp format: YYYY-MM-DD HH:MM:SS</li>
+                    </ul>
+                </div>
+
+                <div class="instruction-card">
+                    <h3><i class="fas fa-code"></i> JSON Format Requirements</h3>
+                    <ul>
+                        <li>Must be an array of objects</li>
+                        <li>Each object must have a timestamp field</li>
+                        <li>Include all relevant measurement fields based on dataset type</li>
+                        <li>Example: <code>[{"timestamp": "2025-05-20 10:00:00", "PM2.5": 32, ...}]</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- API Integration Notes -->
+            <div class="api-notes">
+                <h3><i class="fas fa-info-circle"></i> Backend Integration Notes</h3>
+                <p><strong>This is currently a frontend-only prototype.</strong> To connect a real backend:</p>
+                <ul>
+                    <li>Create a backend API endpoint: <code>POST /api/datasets/upload</code></li>
+                    <li>Implement file validation on the server side</li>
+                    <li>Parse CSV/JSON and insert into database</li>
+                    <li>Return validation results and row counts</li>
+                    <li>Implement proper error handling and security checks</li>
+                    <li>See JavaScript comments in admin upload section for detailed implementation guide</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+    <script>
+        // ============================================
+        // ADMIN UPLOAD PAGE JAVASCRIPT
+        // ============================================
+        // NOTE: This is frontend-only validation
+        // Backend implementation should:
+        // 1. Accept POST request with file data
+        // 2. Parse CSV/JSON format
+        // 3. Validate data against schema
+        // 4. Insert into database
+        // 5. Return validation results
+        // ============================================
+
+        let selectedFile = null;
+
+        // File input handling
+        const fileInput = document.getElementById('fileInput');
+        const fileLabel = document.querySelector('.file-label');
+
+        fileInput.addEventListener('change', function(e) {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                fileLabel.innerHTML = `<i class="fas fa-check-circle"></i> <span>${selectedFile.name}</span>`;
+                fileLabel.style.backgroundColor = '#e8f5e9';
+                fileLabel.style.color = '#2e7d32';
+            }
+        });
+
+        // Drag and drop
+        fileLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileLabel.style.backgroundColor = '#e3f2fd';
+        });
+
+        fileLabel.addEventListener('dragleave', () => {
+            fileLabel.style.backgroundColor = '';
+        });
+
+        fileLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            selectedFile = e.dataTransfer.files[0];
+            fileInput.files = e.dataTransfer.files;
+            if (selectedFile) {
+                fileLabel.innerHTML = `<i class="fas fa-check-circle"></i> <span>${selectedFile.name}</span>`;
+                fileLabel.style.backgroundColor = '#e8f5e9';
+            }
+        });
+
+        // Validate file
+        document.getElementById('validateBtn').addEventListener('click', function() {
+            const datasetType = document.getElementById('datasetType').value;
+            const site = document.getElementById('siteSelect').value;
+
+            if (!selectedFile) {
+                alert('Please select a file');
+                return;
+            }
+
+            if (!datasetType) {
+                alert('Please select a dataset type');
+                return;
+            }
+
+            if (!site) {
+                alert('Please select a monitoring site');
+                return;
+            }
+
+            // Frontend validation simulation
+            // In real implementation, this would:
+            // 1. Read file content
+            // 2. Send to backend: POST /api/datasets/validate
+            // 3. Get validation results from server
+            // 4. Display results
+
+            const mockValidationResults = {
+                fileName: selectedFile.name,
+                rowsDetected: 1250,
+                validRows: 1248,
+                invalidRows: 2,
+                issues: [
+                    'Row 45: Missing NO₂ value',
+                    'Row 782: Invalid timestamp format'
+                ],
+                status: 'Valid'
+            };
+
+            displayValidationResults(mockValidationResults);
+            document.getElementById('uploadBtn').disabled = false;
+        });
+
+        function displayValidationResults(results) {
+            const validationContent = document.getElementById('validationContent');
+            const statusClass = results.status === 'Valid' ? 'success' : 'warning';
+
+            validationContent.innerHTML = `
+                <div class="validation-card ${statusClass}">
+                    <div class="validation-summary">
+                        <p><strong>File:</strong> ${results.fileName}</p>
+                        <p><strong>Rows Detected:</strong> ${results.rowsDetected}</p>
+                        <p><strong>Valid Rows:</strong> ${results.validRows}</p>
+                        <p><strong>Invalid Rows:</strong> ${results.invalidRows}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${results.status.toLowerCase()}">${results.status}</span></p>
+                    </div>
+                    ${results.issues.length > 0 ? `
+                        <div class="validation-issues">
+                            <h4>Issues Found:</h4>
+                            <ul>
+                                ${results.issues.map(issue => `<li>${issue}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            document.getElementById('validationMessages').style.display = 'block';
+            document.getElementById('validationMessages').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Upload dataset
+        document.getElementById('uploadBtn').addEventListener('click', function() {
+            // Frontend-only placeholder
+            // In real implementation, this would:
+            // 1. Send file to backend API: POST /api/datasets/upload
+            // 2. Include file, datasetType, site, metadata
+            // 3. Backend would process and store in database
+            // 4. Return success/failure status
+
+            const fileName = selectedFile.name;
+            const datasetType = document.getElementById('datasetType').value;
+            const site = document.getElementById('siteSelect').value;
+
+            // Mock upload result
+            const uploadResult = {
+                fileName: fileName,
+                datasetType: getDatasetTypeLabel(datasetType),
+                site: site,
+                rowsDetected: 1248,
+                uploadTime: new Date().toLocaleString(),
+                status: 'Uploaded',
+                issues: '0'
+            };
+
+            addUploadResult(uploadResult);
+            alert('Dataset uploaded successfully!\n\nNote: This is a frontend demo. In the live system:\n1. File would be sent to backend API\n2. Data would be parsed and validated on server\n3. Data would be stored in database\n4. API endpoint: POST /api/datasets/upload');
+
+            // Reset form
+            selectedFile = null;
+            fileInput.value = '';
+            fileLabel.innerHTML = '<i class="fas fa-cloud-upload-alt"></i><span>Click to select file or drag and drop</span>';
+            fileLabel.style.backgroundColor = '';
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('datasetType').value = '';
+            document.getElementById('siteSelect').value = '';
+        });
+
+        function getDatasetTypeLabel(value) {
+            const labels = {
+                'air-quality': 'Air Quality Measurements',
+                'noise': 'Noise Monitoring Data',
+                'weather': 'Weather Data',
+                'traffic': 'Traffic Analysis Data'
+            };
+            return labels[value] || value;
+        }
+
+        function addUploadResult(result) {
+            const tbody = document.getElementById('resultsTableBody');
+            const row = tbody.insertRow(0);
+
+            row.innerHTML = `
+                <td>${result.fileName}</td>
+                <td>${result.datasetType}</td>
+                <td>${result.site}</td>
+                <td>${result.rowsDetected}</td>
+                <td>${result.uploadTime}</td>
+                <td><span class="status-badge status-uploaded">${result.status}</span></td>
+                <td>${result.issues}</td>
+            `;
+
+            document.getElementById('uploadResults').style.display = 'block';
+        }
+
+        // Add mock upload history on page load
+        window.addEventListener('load', function() {
+            const mockHistory = [
+                {
+                    fileName: 'braybrook_air_quality_2025_05.csv',
+                    datasetType: 'Air Quality Measurements',
+                    site: 'North Braybrook',
+                    rowsDetected: 2150,
+                    uploadTime: '2025-05-20 14:30:00',
+                    status: 'Uploaded',
+                    issues: '0'
+                },
+                {
+                    fileName: 'noise_data_05_2025.json',
+                    datasetType: 'Noise Monitoring Data',
+                    site: 'Central Braybrook',
+                    rowsDetected: 1850,
+                    uploadTime: '2025-05-19 11:15:00',
+                    status: 'Uploaded',
+                    issues: '2'
+                },
+                {
+                    fileName: 'weather_braybrook_may.csv',
+                    datasetType: 'Weather Data',
+                    site: 'East Braybrook',
+                    rowsDetected: 1920,
+                    uploadTime: '2025-05-18 09:45:00',
+                    status: 'Uploaded',
+                    issues: '0'
+                }
+            ];
+
+            mockHistory.forEach(upload => {
+                addUploadResult(upload);
+            });
+        });
+    </script>
+</body>
+</html>

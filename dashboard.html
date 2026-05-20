@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link active">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <h1>Environmental Dashboard - Braybrook</h1>
+            
+            <!-- Filter Section -->
+            <div class="filter-section">
+                <div class="filter-group">
+                    <label for="siteSelector">Select Monitoring Site:</label>
+                    <select id="siteSelector">
+                        <option value="all">All Sites</option>
+                        <option value="north">North Braybrook</option>
+                        <option value="central">Central Braybrook</option>
+                        <option value="south">South Braybrook</option>
+                        <option value="east">East Braybrook</option>
+                        <option value="west">West Braybrook</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="startDate">Start Date:</label>
+                    <input type="date" id="startDate">
+                </div>
+                <div class="filter-group">
+                    <label for="endDate">End Date:</label>
+                    <input type="date" id="endDate">
+                </div>
+                <button class="btn-primary" id="applyFilters">Apply Filters</button>
+            </div>
+
+            <!-- Notifications Section -->
+            <div id="notificationsContainer" class="notifications-section">
+                <!-- Notifications will be dynamically added here -->
+            </div>
+
+            <!-- Summary Statistics Cards -->
+            <div class="stats-grid">
+                <div class="stat-card air-quality">
+                    <div class="stat-header">
+                        <h3>PM2.5</h3>
+                        <i class="fas fa-wind"></i>
+                    </div>
+                    <div class="stat-value" id="pm25-value">32</div>
+                    <div class="stat-unit">μg/m³</div>
+                    <div class="stat-status" id="pm25-status">Moderate</div>
+                    <div class="stat-trend">
+                        <i class="fas fa-arrow-up"></i> 5% from yesterday
+                    </div>
+                </div>
+
+                <div class="stat-card air-quality">
+                    <div class="stat-header">
+                        <h3>NO₂</h3>
+                        <i class="fas fa-wind"></i>
+                    </div>
+                    <div class="stat-value" id="no2-value">45</div>
+                    <div class="stat-unit">ppb</div>
+                    <div class="stat-status" id="no2-status">Good</div>
+                    <div class="stat-trend">
+                        <i class="fas fa-arrow-down"></i> 3% from yesterday
+                    </div>
+                </div>
+
+                <div class="stat-card air-quality">
+                    <div class="stat-header">
+                        <h3>CO₂</h3>
+                        <i class="fas fa-wind"></i>
+                    </div>
+                    <div class="stat-value" id="co2-value">410</div>
+                    <div class="stat-unit">ppm</div>
+                    <div class="stat-status" id="co2-status">Good</div>
+                    <div class="stat-trend">
+                        <i class="fas fa-arrow-up"></i> 2% from yesterday
+                    </div>
+                </div>
+
+                <div class="stat-card noise">
+                    <div class="stat-header">
+                        <h3>Noise Level</h3>
+                        <i class="fas fa-volume-high"></i>
+                    </div>
+                    <div class="stat-value" id="noise-value">72</div>
+                    <div class="stat-unit">dB(A)</div>
+                    <div class="stat-status" id="noise-status">High</div>
+                    <div class="stat-trend">
+                        <i class="fas fa-arrow-up"></i> 8% from yesterday
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-container">
+                <div class="chart-wrapper">
+                    <h2>Air Quality Trends (Last 7 Days)</h2>
+                    <canvas id="airQualityChart"></canvas>
+                </div>
+
+                <div class="chart-wrapper">
+                    <h2>Noise Level Trends (Last 7 Days)</h2>
+                    <canvas id="noiseChart"></canvas>
+                </div>
+
+                <div class="chart-wrapper full-width">
+                    <h2>Air Quality vs Noise Comparison</h2>
+                    <canvas id="comparisonChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Data Table Section -->
+            <div class="table-section">
+                <h2>Recent Measurements</h2>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Site</th>
+                                <th>Timestamp</th>
+                                <th>PM2.5</th>
+                                <th>NO₂</th>
+                                <th>Noise Level</th>
+                                <th>Temperature</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+        </div>
+    </footer>
+
+    <script src="js/mockData.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/charts.js"></script>
+</body>
+</html>

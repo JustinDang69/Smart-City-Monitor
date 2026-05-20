@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link active">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <h1>About the Smart Air and Noise Quality Monitoring System</h1>
+
+            <!-- Project Overview -->
+            <section class="about-section">
+                <h2><i class="fas fa-bullseye"></i> Project Goals</h2>
+                <div class="about-content">
+                    <p>The Smart Air and Noise Quality Monitoring System is a university capstone project designed to address environmental challenges in the Braybrook region. Our system provides council officers and environmental planners with real-time data and analytics to make informed decisions about air quality, noise pollution, and environmental management.</p>
+                    
+                    <div class="goal-cards">
+                        <div class="goal-card">
+                            <h3><i class="fas fa-chart-line"></i> Data-Driven Decision Making</h3>
+                            <p>Provide accurate, real-time environmental data to support evidence-based policy decisions and interventions.</p>
+                        </div>
+                        <div class="goal-card">
+                            <h3><i class="fas fa-map-marker-alt"></i> Spatial Analysis</h3>
+                            <p>Identify pollution hotspots and vulnerable areas requiring targeted environmental management strategies.</p>
+                        </div>
+                        <div class="goal-card">
+                            <h3><i class="fas fa-bell"></i> Early Warning System</h3>
+                            <p>Alert authorities to air quality and noise pollution incidents for rapid response and public health protection.</p>
+                        </div>
+                        <div class="goal-card">
+                            <h3><i class="fas fa-book"></i> Transparency & Reporting</h3>
+                            <p>Make environmental data accessible to the public and generate comprehensive reports for stakeholder engagement.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Braybrook Environmental Monitoring -->
+            <section class="about-section">
+                <h2><i class="fas fa-map"></i> Braybrook Environmental Monitoring</h2>
+                <div class="about-content">
+                    <p>Braybrook is a diverse urban-industrial area facing significant environmental challenges. The region experiences:</p>
+                    
+                    <div class="challenges-grid">
+                        <div class="challenge-item">
+                            <h4><i class="fas fa-wind"></i> Air Quality Issues</h4>
+                            <p>Industrial activities, traffic congestion, and regional wind patterns contribute to periodic air quality degradation, affecting residents' health.</p>
+                        </div>
+                        <div class="challenge-item">
+                            <h4><i class="fas fa-volume-high"></i> Noise Pollution</h4>
+                            <p>Heavy traffic corridors, freight logistics, and industrial operations create significant noise pollution, impacting community wellbeing.</p>
+                        </div>
+                        <div class="challenge-item">
+                            <h4><i class="fas fa-car"></i> Traffic Congestion</h4>
+                            <p>Growing vehicle numbers increase both emissions and noise, particularly during peak hours on major routes.</p>
+                        </div>
+                        <div class="challenge-item">
+                            <h4><i class="fas fa-industry"></i> Industrial Activity</h4>
+                            <p>Local industrial operations contribute to emissions and particulate matter, requiring ongoing monitoring and management.</p>
+                        </div>
+                    </div>
+
+                    <p style="margin-top: 20px;">This monitoring system provides the data foundation for developing and implementing targeted environmental management strategies.</p>
+                </div>
+            </section>
+
+            <!-- Smart City Concept -->
+            <section class="about-section">
+                <h2><i class="fas fa-city"></i> Smart City Concept</h2>
+                <div class="about-content">
+                    <p>The Smart Air and Noise Quality Monitoring System is built on smart city principles that leverage technology, data, and analytics to improve urban environmental management and quality of life.</p>
+                    
+                    <div class="smart-city-principles">
+                        <div class="principle">
+                            <h4>1. Sensor Networks</h4>
+                            <p>Distributed network of sensors across Braybrook collect continuous environmental data, providing comprehensive spatial coverage.</p>
+                        </div>
+                        <div class="principle">
+                            <h4>2. Real-Time Data Processing</h4>
+                            <p>Advanced data pipelines process sensor information in real-time, enabling immediate alerts and rapid response to environmental issues.</p>
+                        </div>
+                        <div class="principle">
+                            <h4>3. Data Analytics & Insights</h4>
+                            <p>Machine learning and statistical analysis uncover patterns, trends, and correlations to inform environmental policy.</p>
+                        </div>
+                        <div class="principle">
+                            <h4>4. Integration with Urban Systems</h4>
+                            <p>Environmental data integrates with traffic management, industrial monitoring, and urban planning systems for holistic decision support.</p>
+                        </div>
+                        <div class="principle">
+                            <h4>5. Public Engagement</h4>
+                            <p>Transparent data sharing and public dashboards increase awareness and community participation in environmental management.</p>
+                        </div>
+                        <div class="principle">
+                            <h4>6. Sustainability Focus</h4>
+                            <p>All initiatives prioritize environmental sustainability and public health as core objectives of smart city development.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Environmental Monitoring Importance -->
+            <section class="about-section">
+                <h2><i class="fas fa-heartbeat"></i> Why Air and Noise Monitoring Matters</h2>
+                <div class="about-content">
+                    <div class="importance-cards">
+                        <div class="importance-card">
+                            <h3>Public Health</h3>
+                            <p><strong>Air Quality Impact:</strong> Poor air quality contributes to respiratory diseases, cardiovascular problems, and increased mortality. Long-term exposure to particulate matter and nitrogen dioxide is associated with reduced life expectancy.</p>
+                            <p><strong>Noise Impact:</strong> Chronic noise exposure causes sleep disruption, stress, hypertension, and cognitive impairment in children, affecting overall community health.</p>
+                        </div>
+
+                        <div class="importance-card">
+                            <h3>Environmental Justice</h3>
+                            <p>Vulnerable populations in Braybrook often live in areas with higher pollution concentrations. This system supports equitable environmental decision-making and targets resources to communities most affected by pollution.</p>
+                        </div>
+
+                        <div class="importance-card">
+                            <h3>Regulatory Compliance</h3>
+                            <p>Councils must meet national air quality and noise standards. This monitoring system provides evidence for compliance demonstration and identifies areas requiring intervention.</p>
+                        </div>
+
+                        <div class="importance-card">
+                            <h3>Urban Planning</h3>
+                            <p>Environmental monitoring data informs land-use planning, transport strategy development, and industrial zoning decisions to create more liveable cities.</p>
+                        </div>
+
+                        <div class="importance-card">
+                            <h3>Climate Action</h3>
+                            <p>Understanding air quality and emissions supports local climate action strategies, helping Braybrook meet carbon reduction targets and transition to clean energy.</p>
+                        </div>
+
+                        <div class="importance-card">
+                            <h3>Community Empowerment</h3>
+                            <p>Access to environmental data empowers residents to make informed decisions about health, advocate for clean air/quiet neighborhoods, and participate in environmental governance.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Technology Stack -->
+            <section class="about-section">
+                <h2><i class="fas fa-cogs"></i> Technology Stack</h2>
+                <div class="about-content">
+                    <p><strong>This prototype is Frontend Only</strong> and demonstrates the user interface design using:</p>
+                    <ul class="tech-list">
+                        <li><strong>HTML5:</strong> Semantic markup and modern web standards</li>
+                        <li><strong>CSS3:</strong> Responsive design, flexbox, and grid layouts</li>
+                        <li><strong>JavaScript:</strong> Interactive functionality and data visualization</li>
+                        <li><strong>Chart.js:</strong> Beautiful, interactive charts and graphs</li>
+                        <li><strong>Font Awesome:</strong> Professional icon library</li>
+                    </ul>
+
+                    <p style="margin-top: 20px;"><strong>Future Backend Implementation will include:</strong></p>
+                    <ul class="tech-list">
+                        <li>REST API for data management</li>
+                        <li>Real-time data processing pipeline</li>
+                        <li>NoSQL database for sensor data storage</li>
+                        <li>Authentication and authorization systems</li>
+                        <li>Real-time WebSocket connections for live updates</li>
+                        <li>Advanced analytics and machine learning engines</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Team & Acknowledgments -->
+            <section class="about-section">
+                <h2><i class="fas fa-users"></i> Project Information</h2>
+                <div class="about-content">
+                    <p><strong>This is a university capstone project</strong> demonstrating:</p>
+                    <ul>
+                        <li>Professional frontend web development practices</li>
+                        <li>User-centered design and responsive web design</li>
+                        <li>Data visualization and dashboard design</li>
+                        <li>Smart city and environmental technology concepts</li>
+                        <li>Scalable architecture for future backend integration</li>
+                    </ul>
+
+                    <p style="margin-top: 20px;"><strong>Key Features of This Prototype:</strong></p>
+                    <ul>
+                        <li>Fully responsive design for desktop, tablet, and mobile</li>
+                        <li>Mock data simulation for all pages</li>
+                        <li>Frontend authentication system (demo only)</li>
+                        <li>Interactive charts and data visualization</li>
+                        <li>Professional dashboard layout with real-world usability</li>
+                        <li>Comments and documentation for future backend integration</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Contact Section -->
+            <section class="about-section">
+                <h2><i class="fas fa-envelope"></i> Get Involved</h2>
+                <div class="about-content">
+                    <p>This system is designed to support Braybrook's environmental management and create a healthier, more sustainable community. For questions or feedback about the project, please contact the development team.</p>
+                    
+                    <div class="contact-info">
+                        <p><i class="fas fa-envelope"></i> Email: <a href="mailto:info@braybrook-monitoring.gov.au">info@braybrook-monitoring.gov.au</a></p>
+                        <p><i class="fas fa-phone"></i> Phone: (03) 9000 0000</p>
+                        <p><i class="fas fa-map-marker-alt"></i> Braybrook, Victoria, Australia</p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+            <p>University Capstone Project | Frontend Prototype Only</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
