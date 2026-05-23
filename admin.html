@@ -128,10 +128,10 @@
                                 <th>File Name</th>
                                 <th>Dataset Type</th>
                                 <th>Site</th>
-                                <th>Rows Detected</th>
                                 <th>Upload Time</th>
                                 <th>Status</th>
-                                <th>Issues Found</th>
+                                <th>S3 Path</th>
+                                <th>Message</th>
                             </tr>
                         </thead>
                         <tbody id="resultsTableBody">
@@ -169,15 +169,14 @@
 
             <!-- API Integration Notes -->
             <div class="api-notes">
-                <h3><i class="fas fa-info-circle"></i> Backend Integration Notes</h3>
-                <p><strong>This is currently a frontend-only prototype.</strong> To connect a real backend:</p>
+                <h3><i class="fas fa-info-circle"></i> Backend Integration</h3>
+                <p><strong>This system is now connected to a real backend!</strong></p>
                 <ul>
-                    <li>Create a backend API endpoint: <code>POST /api/datasets/upload</code></li>
-                    <li>Implement file validation on the server side</li>
-                    <li>Parse CSV/JSON and insert into database</li>
-                    <li>Return validation results and row counts</li>
-                    <li>Implement proper error handling and security checks</li>
-                    <li>See JavaScript comments in admin upload section for detailed implementation guide</li>
+                    <li>Files are uploaded to: <code>https://il4psjqi16.execute-api.us-east-1.amazonaws.com</code></li>
+                    <li>Lambda function processes the file and validates data</li>
+                    <li>Validated files are stored in AWS S3</li>
+                    <li>S3 path is returned and displayed in upload history</li>
+                    <li>All uploads are logged for audit trail</li>
                 </ul>
             </div>
         </div>
@@ -195,16 +194,14 @@
         // ============================================
         // ADMIN UPLOAD PAGE JAVASCRIPT
         // ============================================
-        // NOTE: This is frontend-only validation
-        // Backend implementation should:
-        // 1. Accept POST request with file data
-        // 2. Parse CSV/JSON format
-        // 3. Validate data against schema
-        // 4. Insert into database
-        // 5. Return validation results
+        // Connected to real backend API:
+        // Endpoint: https://il4psjqi16.execute-api.us-east-1.amazonaws.com
+        // Process: File → Lambda → S3
         // ============================================
 
+        const API_ENDPOINT = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com';
         let selectedFile = null;
+        let validationData = null;
 
         // File input handling
         const fileInput = document.getElementById('fileInput');
@@ -240,7 +237,53 @@
         });
 
         // Validate file
-        document.getElementById('validateBtn').addEventListener('click', function() {
+        document.getElementById('validateBtn').addEventListener('click', async function() {
+            const datasetType = document.getElementById('datasetType').value;
+            const site = document.getElementById('siteSelect').value;
+
+            if (!selectedFile) {
+                showValidationError('Please select a file');
+                return;
+            }
+
+            if (!datasetType) {
+                showValidationError('Please select a dataset type');
+                return;
+            }
+
+            if (!site) {
+                showValidationError('Please select a monitoring site');
+                return;
+            }
+
+            // Show loading state
+            const validateBtn = document.getElementById('validateBtn');
+            const originalText = validateBtn.innerHTML;
+            validateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
+            validateBtn.disabled = true;
+
+            try {
+                // Call API to validate file
+                const result = await uploadFileToAPI(selectedFile, datasetType, site, true);
+                
+                if (result.statusCode === 200 || result.statusCode === 400) {
+                    validationData = result;
+                    displayValidationResults(result, selectedFile.name);
+                    document.getElementById('uploadBtn').disabled = false;
+                } else {
+                    showValidationError('Validation failed: ' + (result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                showValidationError('Error during validation: ' + error.message);
+                console.error('Validation error:', error);
+            } finally {
+                validateBtn.innerHTML = originalText;
+                validateBtn.disabled = false;
+            }
+        });
+
+        // Upload dataset
+        document.getElementById('uploadBtn').addEventListener('click', async function() {
             const datasetType = document.getElementById('datasetType').value;
             const site = document.getElementById('siteSelect').value;
 
@@ -249,103 +292,142 @@
                 return;
             }
 
-            if (!datasetType) {
-                alert('Please select a dataset type');
-                return;
+            // Show loading state
+            const uploadBtn = document.getElementById('uploadBtn');
+            const originalText = uploadBtn.innerHTML;
+            uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            uploadBtn.disabled = true;
+
+            try {
+                // Call API to upload file
+                const result = await uploadFileToAPI(selectedFile, datasetType, site, false);
+                
+                if (result.statusCode === 200 || result.statusCode === 201) {
+                    const uploadResult = {
+                        fileName: selectedFile.name,
+                        datasetType: getDatasetTypeLabel(datasetType),
+                        site: site,
+                        uploadTime: new Date().toLocaleString(),
+                        status: 'Uploaded',
+                        s3Path: result.s3_path || result.body?.s3_path || 'N/A',
+                        message: result.message || 'Upload successful'
+                    };
+
+                    addUploadResult(uploadResult);
+                    alert('Dataset uploaded successfully!\n\nS3 Path: ' + (uploadResult.s3Path || 'File stored in S3'));
+
+                    // Reset form
+                    resetUploadForm();
+                } else {
+                    alert('Upload failed: ' + (result.message || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Error during upload: ' + error.message);
+                console.error('Upload error:', error);
+            } finally {
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
             }
-
-            if (!site) {
-                alert('Please select a monitoring site');
-                return;
-            }
-
-            // Frontend validation simulation
-            // In real implementation, this would:
-            // 1. Read file content
-            // 2. Send to backend: POST /api/datasets/validate
-            // 3. Get validation results from server
-            // 4. Display results
-
-            const mockValidationResults = {
-                fileName: selectedFile.name,
-                rowsDetected: 1250,
-                validRows: 1248,
-                invalidRows: 2,
-                issues: [
-                    'Row 45: Missing NO₂ value',
-                    'Row 782: Invalid timestamp format'
-                ],
-                status: 'Valid'
-            };
-
-            displayValidationResults(mockValidationResults);
-            document.getElementById('uploadBtn').disabled = false;
         });
 
-        function displayValidationResults(results) {
-            const validationContent = document.getElementById('validationContent');
-            const statusClass = results.status === 'Valid' ? 'success' : 'warning';
+        // ============================================
+        // API CALL FUNCTION
+        // ============================================
+        async function uploadFileToAPI(file, datasetType, site, isValidation) {
+            // Read file as base64
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        const fileContent = e.target.result;
+                        const base64Content = fileContent.split(',')[1] || fileContent;
 
-            validationContent.innerHTML = `
+                        // Prepare API request
+                        const requestBody = {
+                            fileName: file.name,
+                            fileContent: base64Content,
+                            datasetType: datasetType,
+                            site: site,
+                            fileType: file.name.split('.').pop().toLowerCase(),
+                            isValidation: isValidation
+                        };
+
+                        // Call Lambda via API Gateway
+                        const response = await fetch(API_ENDPOINT + '/upload', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify(requestBody)
+                        });
+
+                        const result = await response.json();
+                        resolve(result);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function displayValidationResults(results, fileName) {
+            const validationContent = document.getElementById('validationContent');
+            const isValid = results.statusCode === 200;
+            const statusClass = isValid ? 'success' : 'warning';
+
+            let html = `
                 <div class="validation-card ${statusClass}">
                     <div class="validation-summary">
-                        <p><strong>File:</strong> ${results.fileName}</p>
-                        <p><strong>Rows Detected:</strong> ${results.rowsDetected}</p>
-                        <p><strong>Valid Rows:</strong> ${results.validRows}</p>
-                        <p><strong>Invalid Rows:</strong> ${results.invalidRows}</p>
-                        <p><strong>Status:</strong> <span class="status-badge status-${results.status.toLowerCase()}">${results.status}</span></p>
-                    </div>
-                    ${results.issues.length > 0 ? `
-                        <div class="validation-issues">
-                            <h4>Issues Found:</h4>
-                            <ul>
-                                ${results.issues.map(issue => `<li>${issue}</li>`).join('')}
-                            </ul>
-                        </div>
-                    ` : ''}
-                </div>
+                        <p><strong>File:</strong> ${fileName}</p>
+                        <p><strong>Status:</strong> <span class="status-badge status-${isValid ? 'uploaded' : 'moderate'}">${isValid ? 'Valid' : 'Issues Found'}</span></p>
             `;
 
+            // Add validation details if available
+            if (results.body) {
+                const body = typeof results.body === 'string' ? JSON.parse(results.body) : results.body;
+                if (body.rowCount) {
+                    html += `<p><strong>Rows Detected:</strong> ${body.rowCount}</p>`;
+                }
+                if (body.validRows) {
+                    html += `<p><strong>Valid Rows:</strong> ${body.validRows}</p>`;
+                }
+                if (body.message) {
+                    html += `<p><strong>Message:</strong> ${body.message}</p>`;
+                }
+            }
+
+            html += `</div>`;
+
+            // Add issues if any
+            if (results.errors && results.errors.length > 0) {
+                html += `
+                    <div class="validation-issues">
+                        <h4>Issues Found:</h4>
+                        <ul>
+                            ${results.errors.map(error => `<li>${error}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            validationContent.innerHTML = html;
             document.getElementById('validationMessages').style.display = 'block';
             document.getElementById('validationMessages').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Upload dataset
-        document.getElementById('uploadBtn').addEventListener('click', function() {
-            // Frontend-only placeholder
-            // In real implementation, this would:
-            // 1. Send file to backend API: POST /api/datasets/upload
-            // 2. Include file, datasetType, site, metadata
-            // 3. Backend would process and store in database
-            // 4. Return success/failure status
-
-            const fileName = selectedFile.name;
-            const datasetType = document.getElementById('datasetType').value;
-            const site = document.getElementById('siteSelect').value;
-
-            // Mock upload result
-            const uploadResult = {
-                fileName: fileName,
-                datasetType: getDatasetTypeLabel(datasetType),
-                site: site,
-                rowsDetected: 1248,
-                uploadTime: new Date().toLocaleString(),
-                status: 'Uploaded',
-                issues: '0'
-            };
-
-            addUploadResult(uploadResult);
-            alert('Dataset uploaded successfully!\n\nNote: This is a frontend demo. In the live system:\n1. File would be sent to backend API\n2. Data would be parsed and validated on server\n3. Data would be stored in database\n4. API endpoint: POST /api/datasets/upload');
-
-            // Reset form
-            selectedFile = null;
-            fileInput.value = '';
-            fileLabel.innerHTML = '<i class="fas fa-cloud-upload-alt"></i><span>Click to select file or drag and drop</span>';
-            fileLabel.style.backgroundColor = '';
+        function showValidationError(message) {
+            const validationContent = document.getElementById('validationContent');
+            validationContent.innerHTML = `
+                <div class="validation-card warning">
+                    <div class="validation-summary">
+                        <p><strong>Error:</strong> ${message}</p>
+                    </div>
+                </div>
+            `;
+            document.getElementById('validationMessages').style.display = 'block';
             document.getElementById('uploadBtn').disabled = true;
-            document.getElementById('datasetType').value = '';
-            document.getElementById('siteSelect').value = '';
-        });
+        }
 
         function getDatasetTypeLabel(value) {
             const labels = {
@@ -365,50 +447,30 @@
                 <td>${result.fileName}</td>
                 <td>${result.datasetType}</td>
                 <td>${result.site}</td>
-                <td>${result.rowsDetected}</td>
                 <td>${result.uploadTime}</td>
                 <td><span class="status-badge status-uploaded">${result.status}</span></td>
-                <td>${result.issues}</td>
+                <td><code style="font-size: 11px; word-break: break-all;">${result.s3Path}</code></td>
+                <td>${result.message}</td>
             `;
 
             document.getElementById('uploadResults').style.display = 'block';
         }
 
-        // Add mock upload history on page load
-        window.addEventListener('load', function() {
-            const mockHistory = [
-                {
-                    fileName: 'braybrook_air_quality_2025_05.csv',
-                    datasetType: 'Air Quality Measurements',
-                    site: 'North Braybrook',
-                    rowsDetected: 2150,
-                    uploadTime: '2025-05-20 14:30:00',
-                    status: 'Uploaded',
-                    issues: '0'
-                },
-                {
-                    fileName: 'noise_data_05_2025.json',
-                    datasetType: 'Noise Monitoring Data',
-                    site: 'Central Braybrook',
-                    rowsDetected: 1850,
-                    uploadTime: '2025-05-19 11:15:00',
-                    status: 'Uploaded',
-                    issues: '2'
-                },
-                {
-                    fileName: 'weather_braybrook_may.csv',
-                    datasetType: 'Weather Data',
-                    site: 'East Braybrook',
-                    rowsDetected: 1920,
-                    uploadTime: '2025-05-18 09:45:00',
-                    status: 'Uploaded',
-                    issues: '0'
-                }
-            ];
+        function resetUploadForm() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileLabel.innerHTML = '<i class="fas fa-cloud-upload-alt"></i><span>Click to select file or drag and drop</span>';
+            fileLabel.style.backgroundColor = '';
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('datasetType').value = '';
+            document.getElementById('siteSelect').value = '';
+            validationData = null;
+        }
 
-            mockHistory.forEach(upload => {
-                addUploadResult(upload);
-            });
+        // Load mock upload history on page load
+        window.addEventListener('load', function() {
+            // Optional: Load previous uploads from localStorage or backend
+            // For now, we can add example uploads
         });
     </script>
 </body>
