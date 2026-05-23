@@ -101,10 +101,7 @@
                         </div>
 
                         <div class="form-actions">
-                            <button class="btn-primary" id="validateBtn">
-                                <i class="fas fa-check-circle"></i> Validate File
-                            </button>
-                            <button class="btn-secondary" id="uploadBtn" disabled>
+                            <button class="btn-primary" id="uploadBtn" disabled>
                                 <i class="fas fa-upload"></i> Upload Dataset
                             </button>
                         </div>
@@ -112,10 +109,15 @@
                 </div>
             </div>
 
-            <!-- Validation Messages Section -->
-            <div id="validationMessages" style="display:none;" class="validation-section">
-                <h2>Validation Results</h2>
-                <div id="validationContent"></div>
+            <!-- Upload Progress Section -->
+            <div id="uploadProgress" style="display:none;" class="progress-section">
+                <h2>Upload Progress</h2>
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText">0%</p>
+                </div>
             </div>
 
             <!-- Upload Results Table Section -->
@@ -170,13 +172,13 @@
             <!-- API Integration Notes -->
             <div class="api-notes">
                 <h3><i class="fas fa-info-circle"></i> Backend Integration</h3>
-                <p><strong>This system is now connected to a real backend!</strong></p>
+                <p><strong>This system is now connected to a real backend with presigned S3 URLs!</strong></p>
                 <ul>
-                    <li>Files are uploaded to: <code>https://il4psjqi16.execute-api.us-east-1.amazonaws.com</code></li>
-                    <li>Lambda function processes the file and validates data</li>
-                    <li>Validated files are stored in AWS S3</li>
+                    <li>API Endpoint: <code>https://il4psjqi16.execute-api.us-east-1.amazonaws.com/generate-upload-url</code></li>
+                    <li>Lambda generates presigned S3 upload URLs</li>
+                    <li>Files are directly uploaded to S3 via presigned URLs</li>
                     <li>S3 path is returned and displayed in upload history</li>
-                    <li>All uploads are logged for audit trail</li>
+                    <li>Supports large file uploads with progress tracking</li>
                 </ul>
             </div>
         </div>
@@ -194,14 +196,16 @@
         // ============================================
         // ADMIN UPLOAD PAGE JAVASCRIPT
         // ============================================
-        // Connected to real backend API:
-        // Endpoint: https://il4psjqi16.execute-api.us-east-1.amazonaws.com
-        // Process: File → Lambda → S3
+        // Connected to real backend API with presigned URLs:
+        // Endpoint: https://il4psjqi16.execute-api.us-east-1.amazonaws.com/generate-upload-url
+        // Process: 
+        // 1. Request presigned URL from Lambda
+        // 2. Upload file directly to S3
+        // 3. Receive S3 path
         // ============================================
 
-        const API_ENDPOINT = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com';
+        const API_ENDPOINT = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/generate-upload-url';
         let selectedFile = null;
-        let validationData = null;
 
         // File input handling
         const fileInput = document.getElementById('fileInput');
@@ -236,52 +240,6 @@
             }
         });
 
-        // Validate file
-        document.getElementById('validateBtn').addEventListener('click', async function() {
-            const datasetType = document.getElementById('datasetType').value;
-            const site = document.getElementById('siteSelect').value;
-
-            if (!selectedFile) {
-                showValidationError('Please select a file');
-                return;
-            }
-
-            if (!datasetType) {
-                showValidationError('Please select a dataset type');
-                return;
-            }
-
-            if (!site) {
-                showValidationError('Please select a monitoring site');
-                return;
-            }
-
-            // Show loading state
-            const validateBtn = document.getElementById('validateBtn');
-            const originalText = validateBtn.innerHTML;
-            validateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
-            validateBtn.disabled = true;
-
-            try {
-                // Call API to validate file
-                const result = await uploadFileToAPI(selectedFile, datasetType, site, true);
-                
-                if (result.statusCode === 200 || result.statusCode === 400) {
-                    validationData = result;
-                    displayValidationResults(result, selectedFile.name);
-                    document.getElementById('uploadBtn').disabled = false;
-                } else {
-                    showValidationError('Validation failed: ' + (result.message || 'Unknown error'));
-                }
-            } catch (error) {
-                showValidationError('Error during validation: ' + error.message);
-                console.error('Validation error:', error);
-            } finally {
-                validateBtn.innerHTML = originalText;
-                validateBtn.disabled = false;
-            }
-        });
-
         // Upload dataset
         document.getElementById('uploadBtn').addEventListener('click', async function() {
             const datasetType = document.getElementById('datasetType').value;
@@ -292,6 +250,16 @@
                 return;
             }
 
+            if (!datasetType) {
+                alert('Please select a dataset type');
+                return;
+            }
+
+            if (!site) {
+                alert('Please select a monitoring site');
+                return;
+            }
+
             // Show loading state
             const uploadBtn = document.getElementById('uploadBtn');
             const originalText = uploadBtn.innerHTML;
@@ -299,28 +267,40 @@
             uploadBtn.disabled = true;
 
             try {
-                // Call API to upload file
-                const result = await uploadFileToAPI(selectedFile, datasetType, site, false);
-                
-                if (result.statusCode === 200 || result.statusCode === 201) {
-                    const uploadResult = {
-                        fileName: selectedFile.name,
-                        datasetType: getDatasetTypeLabel(datasetType),
-                        site: site,
-                        uploadTime: new Date().toLocaleString(),
-                        status: 'Uploaded',
-                        s3Path: result.s3_path || result.body?.s3_path || 'N/A',
-                        message: result.message || 'Upload successful'
-                    };
+                // Step 1: Get presigned URL from Lambda
+                const presignedURLData = await requestPresignedURL(
+                    selectedFile.name,
+                    datasetType,
+                    site,
+                    selectedFile.type
+                );
 
-                    addUploadResult(uploadResult);
-                    alert('Dataset uploaded successfully!\n\nS3 Path: ' + (uploadResult.s3Path || 'File stored in S3'));
-
-                    // Reset form
-                    resetUploadForm();
-                } else {
-                    alert('Upload failed: ' + (result.message || 'Unknown error'));
+                if (!presignedURLData || !presignedURLData.uploadUrl) {
+                    throw new Error('Failed to get presigned URL');
                 }
+
+                // Step 2: Upload file directly to S3
+                await uploadFileToS3(
+                    selectedFile,
+                    presignedURLData.uploadUrl
+                );
+
+                // Step 3: Record upload
+                const uploadResult = {
+                    fileName: selectedFile.name,
+                    datasetType: getDatasetTypeLabel(datasetType),
+                    site: site,
+                    uploadTime: new Date().toLocaleString(),
+                    status: 'Uploaded',
+                    s3Path: presignedURLData.s3Path || presignedURLData.fileKey || selectedFile.name,
+                    message: 'Upload successful'
+                };
+
+                addUploadResult(uploadResult);
+                alert('Dataset uploaded successfully!\\n\\nS3 Path: ' + uploadResult.s3Path);
+
+                // Reset form
+                resetUploadForm();
             } catch (error) {
                 alert('Error during upload: ' + error.message);
                 console.error('Upload error:', error);
@@ -331,102 +311,93 @@
         });
 
         // ============================================
-        // API CALL FUNCTION
+        // REQUEST PRESIGNED URL FROM LAMBDA
         // ============================================
-        async function uploadFileToAPI(file, datasetType, site, isValidation) {
-            // Read file as base64
+        async function requestPresignedURL(fileName, datasetType, site, fileType) {
+            try {
+                const requestBody = {
+                    fileName: fileName,
+                    fileType: fileType,
+                    datasetType: datasetType,
+                    site: site
+                };
+
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('Presigned URL response:', data);
+                return data;
+            } catch (error) {
+                console.error('Error getting presigned URL:', error);
+                throw error;
+            }
+        }
+
+        // ============================================
+        // UPLOAD FILE DIRECTLY TO S3
+        // ============================================
+        async function uploadFileToS3(file, presignedUrl) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
+
+                reader.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percentComplete = (event.loaded / event.total) * 100;
+                        updateProgress(percentComplete);
+                    }
+                };
+
                 reader.onload = async function(e) {
                     try {
                         const fileContent = e.target.result;
-                        const base64Content = fileContent.split(',')[1] || fileContent;
 
-                        // Prepare API request
-                        const requestBody = {
-                            fileName: file.name,
-                            fileContent: base64Content,
-                            datasetType: datasetType,
-                            site: site,
-                            fileType: file.name.split('.').pop().toLowerCase(),
-                            isValidation: isValidation
-                        };
-
-                        // Call Lambda via API Gateway
-                        const response = await fetch(API_ENDPOINT + '/upload', {
-                            method: 'POST',
+                        const response = await fetch(presignedUrl, {
+                            method: 'PUT',
                             headers: {
-                                'Content-Type': 'application/json'
+                                'Content-Type': file.type || 'text/csv'
                             },
-                            body: JSON.stringify(requestBody)
+                            body: fileContent
                         });
 
-                        const result = await response.json();
-                        resolve(result);
+                        if (!response.ok) {
+                            throw new Error(`S3 upload failed with status: ${response.status}`);
+                        }
+
+                        updateProgress(100);
+                        console.log('File uploaded to S3 successfully');
+                        resolve();
                     } catch (error) {
                         reject(error);
                     }
                 };
-                reader.readAsDataURL(file);
+
+                reader.onerror = () => {
+                    reject(new Error('File reading error'));
+                };
+
+                reader.readAsArrayBuffer(file);
             });
         }
 
-        function displayValidationResults(results, fileName) {
-            const validationContent = document.getElementById('validationContent');
-            const isValid = results.statusCode === 200;
-            const statusClass = isValid ? 'success' : 'warning';
-
-            let html = `
-                <div class="validation-card ${statusClass}">
-                    <div class="validation-summary">
-                        <p><strong>File:</strong> ${fileName}</p>
-                        <p><strong>Status:</strong> <span class="status-badge status-${isValid ? 'uploaded' : 'moderate'}">${isValid ? 'Valid' : 'Issues Found'}</span></p>
-            `;
-
-            // Add validation details if available
-            if (results.body) {
-                const body = typeof results.body === 'string' ? JSON.parse(results.body) : results.body;
-                if (body.rowCount) {
-                    html += `<p><strong>Rows Detected:</strong> ${body.rowCount}</p>`;
-                }
-                if (body.validRows) {
-                    html += `<p><strong>Valid Rows:</strong> ${body.validRows}</p>`;
-                }
-                if (body.message) {
-                    html += `<p><strong>Message:</strong> ${body.message}</p>`;
-                }
-            }
-
-            html += `</div>`;
-
-            // Add issues if any
-            if (results.errors && results.errors.length > 0) {
-                html += `
-                    <div class="validation-issues">
-                        <h4>Issues Found:</h4>
-                        <ul>
-                            ${results.errors.map(error => `<li>${error}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
-
-            validationContent.innerHTML = html;
-            document.getElementById('validationMessages').style.display = 'block';
-            document.getElementById('validationMessages').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function showValidationError(message) {
-            const validationContent = document.getElementById('validationContent');
-            validationContent.innerHTML = `
-                <div class="validation-card warning">
-                    <div class="validation-summary">
-                        <p><strong>Error:</strong> ${message}</p>
-                    </div>
-                </div>
-            `;
-            document.getElementById('validationMessages').style.display = 'block';
-            document.getElementById('uploadBtn').disabled = true;
+        function updateProgress(percent) {
+            const progressContainer = document.getElementById('uploadProgress');
+            progressContainer.style.display = 'block';
+            
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressFill.style.width = percent + '%';
+            progressText.textContent = Math.round(percent) + '%';
         }
 
         function getDatasetTypeLabel(value) {
@@ -464,14 +435,12 @@
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('datasetType').value = '';
             document.getElementById('siteSelect').value = '';
-            validationData = null;
+            
+            // Hide progress
+            document.getElementById('uploadProgress').style.display = 'none';
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('progressText').textContent = '0%';
         }
-
-        // Load mock upload history on page load
-        window.addEventListener('load', function() {
-            // Optional: Load previous uploads from localStorage or backend
-            // For now, we can add example uploads
-        });
     </script>
 </body>
 </html>
