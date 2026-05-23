@@ -6,6 +6,56 @@
     <title>Admin Upload - Smart Air and Noise Quality Monitoring System</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .status-message {
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: none;
+            font-size: 14px;
+        }
+        .status-message.success {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            color: #2e7d32;
+        }
+        .status-message.error {
+            background-color: #ffebee;
+            border-left: 4px solid #d32f2f;
+            color: #c62828;
+        }
+        .status-message.info {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            color: #1565c0;
+        }
+        .progress-section {
+            background-color: white;
+            border-radius: 8px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        .progress-bar {
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            height: 25px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #4caf50, #2e7d32);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -60,6 +110,9 @@
         <div class="container">
             <h1>Admin Data Upload - Braybrook</h1>
 
+            <!-- Status Message Section -->
+            <div id="statusMessage" class="status-message"></div>
+
             <!-- Upload Form Section -->
             <div class="admin-section">
                 <h2>Upload Environmental Data</h2>
@@ -112,12 +165,10 @@
             <!-- Upload Progress Section -->
             <div id="uploadProgress" style="display:none;" class="progress-section">
                 <h2>Upload Progress</h2>
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div id="progressFill" class="progress-fill"></div>
-                    </div>
-                    <p id="progressText">0%</p>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
                 </div>
+                <p id="progressText" style="text-align: center; margin-top: 10px; font-weight: bold;">Uploading... 0%</p>
             </div>
 
             <!-- Upload Results Table Section -->
@@ -198,10 +249,6 @@
         // ============================================
         // Connected to real backend API with presigned URLs:
         // Endpoint: https://il4psjqi16.execute-api.us-east-1.amazonaws.com/generate-upload-url
-        // Process: 
-        // 1. Request presigned URL from Lambda
-        // 2. Upload file directly to S3
-        // 3. Receive S3 path
         // ============================================
 
         const API_ENDPOINT = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/generate-upload-url';
@@ -214,9 +261,11 @@
         fileInput.addEventListener('change', function(e) {
             selectedFile = e.target.files[0];
             if (selectedFile) {
+                console.log('File selected:', selectedFile.name);
                 fileLabel.innerHTML = `<i class="fas fa-check-circle"></i> <span>${selectedFile.name}</span>`;
                 fileLabel.style.backgroundColor = '#e8f5e9';
                 fileLabel.style.color = '#2e7d32';
+                document.getElementById('uploadBtn').disabled = false;
             }
         });
 
@@ -235,28 +284,36 @@
             selectedFile = e.dataTransfer.files[0];
             fileInput.files = e.dataTransfer.files;
             if (selectedFile) {
+                console.log('File dropped:', selectedFile.name);
                 fileLabel.innerHTML = `<i class="fas fa-check-circle"></i> <span>${selectedFile.name}</span>`;
                 fileLabel.style.backgroundColor = '#e8f5e9';
+                document.getElementById('uploadBtn').disabled = false;
             }
         });
 
         // Upload dataset
         document.getElementById('uploadBtn').addEventListener('click', async function() {
+            console.log('=== UPLOAD BUTTON CLICKED ===');
+            
             const datasetType = document.getElementById('datasetType').value;
             const site = document.getElementById('siteSelect').value;
 
+            console.log('Dataset Type:', datasetType);
+            console.log('Site:', site);
+            console.log('File:', selectedFile);
+
             if (!selectedFile) {
-                alert('Please select a file');
+                showStatus('Please select a file', 'error');
                 return;
             }
 
             if (!datasetType) {
-                alert('Please select a dataset type');
+                showStatus('Please select a dataset type', 'error');
                 return;
             }
 
             if (!site) {
-                alert('Please select a monitoring site');
+                showStatus('Please select a monitoring site', 'error');
                 return;
             }
 
@@ -266,7 +323,12 @@
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
             uploadBtn.disabled = true;
 
+            showStatus('Starting upload process...', 'info');
+
             try {
+                console.log('Step 1: Requesting presigned URL...');
+                showStatus('Requesting presigned URL from server...', 'info');
+                
                 // Step 1: Get presigned URL from Lambda
                 const presignedURLData = await requestPresignedURL(
                     selectedFile.name,
@@ -275,15 +337,23 @@
                     selectedFile.type
                 );
 
+                console.log('Presigned URL Response:', presignedURLData);
+
                 if (!presignedURLData || !presignedURLData.uploadUrl) {
-                    throw new Error('Failed to get presigned URL');
+                    throw new Error('Failed to get presigned URL from server');
                 }
+
+                showStatus('Got presigned URL! Uploading file to S3...', 'info');
+                console.log('Step 2: Uploading file to S3...');
 
                 // Step 2: Upload file directly to S3
                 await uploadFileToS3(
                     selectedFile,
                     presignedURLData.uploadUrl
                 );
+
+                console.log('Step 3: Upload complete! Recording in history...');
+                showStatus('File uploaded successfully!', 'success');
 
                 // Step 3: Record upload
                 const uploadResult = {
@@ -296,14 +366,19 @@
                     message: 'Upload successful'
                 };
 
+                console.log('Upload Result:', uploadResult);
                 addUploadResult(uploadResult);
-                alert('Dataset uploaded successfully!\\n\\nS3 Path: ' + uploadResult.s3Path);
+                
+                showStatus('✓ Dataset uploaded successfully! S3 Path: ' + uploadResult.s3Path, 'success');
 
                 // Reset form
                 resetUploadForm();
             } catch (error) {
-                alert('Error during upload: ' + error.message);
-                console.error('Upload error:', error);
+                console.error('=== UPLOAD ERROR ===', error);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                
+                showStatus('✗ Error during upload: ' + error.message, 'error');
             } finally {
                 uploadBtn.innerHTML = originalText;
                 uploadBtn.disabled = false;
@@ -322,6 +397,9 @@
                     site: site
                 };
 
+                console.log('Sending request to:', API_ENDPOINT);
+                console.log('Request body:', requestBody);
+
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: {
@@ -330,12 +408,17 @@
                     body: JSON.stringify(requestBody)
                 });
 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
                 }
 
                 const data = await response.json();
-                console.log('Presigned URL response:', data);
+                console.log('Presigned URL received:', data);
                 return data;
             } catch (error) {
                 console.error('Error getting presigned URL:', error);
@@ -353,12 +436,14 @@
                 reader.onprogress = (event) => {
                     if (event.lengthComputable) {
                         const percentComplete = (event.loaded / event.total) * 100;
+                        console.log('Upload progress:', percentComplete + '%');
                         updateProgress(percentComplete);
                     }
                 };
 
                 reader.onload = async function(e) {
                     try {
+                        console.log('File read complete, uploading to S3...');
                         const fileContent = e.target.result;
 
                         const response = await fetch(presignedUrl, {
@@ -369,6 +454,8 @@
                             body: fileContent
                         });
 
+                        console.log('S3 response status:', response.status);
+
                         if (!response.ok) {
                             throw new Error(`S3 upload failed with status: ${response.status}`);
                         }
@@ -377,14 +464,18 @@
                         console.log('File uploaded to S3 successfully');
                         resolve();
                     } catch (error) {
+                        console.error('S3 upload error:', error);
                         reject(error);
                     }
                 };
 
                 reader.onerror = () => {
-                    reject(new Error('File reading error'));
+                    const error = new Error('File reading error');
+                    console.error(error);
+                    reject(error);
                 };
 
+                console.log('Starting file read as ArrayBuffer...');
                 reader.readAsArrayBuffer(file);
             });
         }
@@ -396,8 +487,25 @@
             const progressFill = document.getElementById('progressFill');
             const progressText = document.getElementById('progressText');
             
-            progressFill.style.width = percent + '%';
-            progressText.textContent = Math.round(percent) + '%';
+            const roundedPercent = Math.round(percent);
+            progressFill.style.width = roundedPercent + '%';
+            progressFill.textContent = roundedPercent + '%';
+            progressText.textContent = 'Uploading... ' + roundedPercent + '%';
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message ' + type;
+            statusDiv.style.display = 'block';
+            console.log('[' + type.toUpperCase() + ']', message);
+            
+            // Auto-hide info messages after 5 seconds
+            if (type === 'info') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 5000);
+            }
         }
 
         function getDatasetTypeLabel(value) {
@@ -441,6 +549,10 @@
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressText').textContent = '0%';
         }
+
+        // Log when page loads
+        console.log('=== ADMIN UPLOAD PAGE LOADED ===');
+        console.log('API Endpoint:', API_ENDPOINT);
     </script>
 </body>
 </html>
