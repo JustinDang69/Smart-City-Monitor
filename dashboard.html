@@ -7,6 +7,48 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #2e7d32;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .data-loading {
+            display: none;
+            padding: 20px;
+            text-align: center;
+            background-color: #e3f2fd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .data-loading.show {
+            display: block;
+        }
+        .data-error {
+            display: none;
+            padding: 20px;
+            background-color: #ffebee;
+            border-left: 4px solid #d32f2f;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            color: #c62828;
+        }
+        .data-error.show {
+            display: block;
+        }
+        .data-error .error-icon {
+            margin-right: 10px;
+        }
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -61,6 +103,18 @@
         <div class="container">
             <h1>Environmental Dashboard - Braybrook</h1>
             
+            <!-- Data Loading Indicator -->
+            <div id="dataLoading" class="data-loading">
+                <div class="loading-spinner"></div>
+                <span>Loading data from CloudFront...</span>
+            </div>
+
+            <!-- Data Error Message -->
+            <div id="dataError" class="data-error">
+                <i class="fas fa-exclamation-circle error-icon"></i>
+                <span id="errorMessage">Error loading data</span>
+            </div>
+            
             <!-- Filter Section -->
             <div class="filter-section">
                 <div class="filter-group">
@@ -97,11 +151,11 @@
                         <h3>PM2.5</h3>
                         <i class="fas fa-wind"></i>
                     </div>
-                    <div class="stat-value" id="pm25-value">32</div>
+                    <div class="stat-value" id="pm25-value">--</div>
                     <div class="stat-unit">μg/m³</div>
-                    <div class="stat-status" id="pm25-status">Moderate</div>
+                    <div class="stat-status" id="pm25-status">Loading</div>
                     <div class="stat-trend">
-                        <i class="fas fa-arrow-up"></i> 5% from yesterday
+                        <i class="fas fa-arrow-up"></i> <span id="pm25-trend">--</span>
                     </div>
                 </div>
 
@@ -110,11 +164,11 @@
                         <h3>NO₂</h3>
                         <i class="fas fa-wind"></i>
                     </div>
-                    <div class="stat-value" id="no2-value">45</div>
+                    <div class="stat-value" id="no2-value">--</div>
                     <div class="stat-unit">ppb</div>
-                    <div class="stat-status" id="no2-status">Good</div>
+                    <div class="stat-status" id="no2-status">Loading</div>
                     <div class="stat-trend">
-                        <i class="fas fa-arrow-down"></i> 3% from yesterday
+                        <i class="fas fa-arrow-down"></i> <span id="no2-trend">--</span>
                     </div>
                 </div>
 
@@ -123,11 +177,11 @@
                         <h3>CO₂</h3>
                         <i class="fas fa-wind"></i>
                     </div>
-                    <div class="stat-value" id="co2-value">410</div>
+                    <div class="stat-value" id="co2-value">--</div>
                     <div class="stat-unit">ppm</div>
-                    <div class="stat-status" id="co2-status">Good</div>
+                    <div class="stat-status" id="co2-status">Loading</div>
                     <div class="stat-trend">
-                        <i class="fas fa-arrow-up"></i> 2% from yesterday
+                        <i class="fas fa-arrow-up"></i> <span id="co2-trend">--</span>
                     </div>
                 </div>
 
@@ -136,11 +190,11 @@
                         <h3>Noise Level</h3>
                         <i class="fas fa-volume-high"></i>
                     </div>
-                    <div class="stat-value" id="noise-value">72</div>
+                    <div class="stat-value" id="noise-value">--</div>
                     <div class="stat-unit">dB(A)</div>
-                    <div class="stat-status" id="noise-status">High</div>
+                    <div class="stat-status" id="noise-status">Loading</div>
                     <div class="stat-trend">
-                        <i class="fas fa-arrow-up"></i> 8% from yesterday
+                        <i class="fas fa-arrow-up"></i> <span id="noise-trend">--</span>
                     </div>
                 </div>
             </div>
@@ -195,8 +249,406 @@
         </div>
     </footer>
 
-    <script src="js/mockData.js"></script>
     <script src="js/main.js"></script>
-    <script src="js/charts.js"></script>
+    <script>
+        // ============================================
+        // CLOUDFRONT INTEGRATION FOR DASHBOARD
+        // ============================================
+        // Fetches cleaned CSV files from CloudFront S3
+        // Parses and displays data in charts and tables
+        // ============================================
+
+        const CLOUDFRONT_BASE_URL = 'https://d2kx23ryzydc3y.cloudfront.net';
+        
+        let chartInstances = {
+            airQuality: null,
+            noise: null,
+            comparison: null
+        };
+
+        // Initialize dashboard on page load
+        window.addEventListener('load', async function() {
+            console.log('=== DASHBOARD LOADING ===');
+            console.log('CloudFront Base URL:', CLOUDFRONT_BASE_URL);
+            
+            showLoadingState(true);
+            
+            try {
+                // Fetch air quality data
+                const airQualityData = await fetchCleanedCSV('air-quality', 'air_quality_data');
+                console.log('Air Quality Data:', airQualityData);
+                
+                // Fetch noise data
+                const noiseData = await fetchCleanedCSV('noise', 'noise_data');
+                console.log('Noise Data:', noiseData);
+                
+                // Update KPI cards
+                updateKPICards(airQualityData, noiseData);
+                
+                // Initialize charts
+                initializeCharts(airQualityData, noiseData);
+                
+                // Populate data table
+                populateDataTable(airQualityData, noiseData);
+                
+                showLoadingState(false);
+                console.log('✓ Dashboard loaded successfully');
+            } catch (error) {
+                console.error('=== DASHBOARD ERROR ===', error);
+                showErrorState(error.message);
+            }
+        });
+
+        // ============================================
+        // FETCH CLEANED CSV FROM CLOUDFRONT
+        // ============================================
+        async function fetchCleanedCSV(datasetType, filename) {
+            try {
+                const url = `${CLOUDFRONT_BASE_URL}/cleaned-data/${datasetType}/${filename}_cleaned.csv`;
+                console.log('Fetching from:', url);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP Error! Status: ${response.status}`);
+                }
+                
+                const csvText = await response.text();
+                console.log(`Received ${csvText.length} bytes from ${datasetType}`);
+                
+                const parsedData = parseCSV(csvText);
+                console.log(`Parsed ${parsedData.length} rows from ${datasetType}`);
+                
+                return parsedData;
+            } catch (error) {
+                console.error(`Error fetching ${datasetType}:`, error);
+                throw new Error(`Failed to load ${datasetType} data: ${error.message}`);
+            }
+        }
+
+        // ============================================
+        // PARSE CSV TEXT TO JAVASCRIPT OBJECTS
+        // ============================================
+        function parseCSV(csvText) {
+            try {
+                const lines = csvText.trim().split('\n');
+                
+                if (lines.length < 2) {
+                    throw new Error('CSV file is empty or malformed');
+                }
+                
+                // Get headers from first line
+                const headers = lines[0].split(',').map(h => h.trim());
+                console.log('CSV Headers:', headers);
+                
+                // Parse data rows
+                const data = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(v => v.trim());
+                    
+                    if (values.length !== headers.length) {
+                        continue; // Skip malformed rows
+                    }
+                    
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        // Try to convert to number
+                        const value = values[index];
+                        row[header] = isNaN(value) ? value : parseFloat(value);
+                    });
+                    
+                    data.push(row);
+                }
+                
+                return data;
+            } catch (error) {
+                console.error('CSV Parse Error:', error);
+                throw error;
+            }
+        }
+
+        // ============================================
+        // UPDATE KPI STAT CARDS
+        // ============================================
+        function updateKPICards(airQualityData, noiseData) {
+            try {
+                console.log('Updating KPI cards...');
+                
+                // Get latest air quality reading
+                if (airQualityData.length > 0) {
+                    const latest = airQualityData[airQualityData.length - 1];
+                    
+                    // PM2.5
+                    if (latest.pm25 !== undefined) {
+                        const pm25Value = parseFloat(latest.pm25);
+                        document.getElementById('pm25-value').textContent = pm25Value.toFixed(1);
+                        document.getElementById('pm25-status').textContent = getAirQualityStatus(pm25Value);
+                    }
+                    
+                    // NO2
+                    if (latest.no2 !== undefined) {
+                        const no2Value = parseFloat(latest.no2);
+                        document.getElementById('no2-value').textContent = no2Value.toFixed(1);
+                        document.getElementById('no2-status').textContent = getAirQualityStatus(no2Value);
+                    }
+                    
+                    // CO2
+                    if (latest.co2 !== undefined) {
+                        const co2Value = parseFloat(latest.co2);
+                        document.getElementById('co2-value').textContent = co2Value.toFixed(0);
+                        document.getElementById('co2-status').textContent = 'Good'; // Adjust based on thresholds
+                    }
+                }
+                
+                // Get latest noise reading
+                if (noiseData.length > 0) {
+                    const latest = noiseData[noiseData.length - 1];
+                    
+                    if (latest.noise_level !== undefined) {
+                        const noiseValue = parseFloat(latest.noise_level);
+                        document.getElementById('noise-value').textContent = noiseValue.toFixed(1);
+                        document.getElementById('noise-status').textContent = getNoiseStatus(noiseValue);
+                    }
+                }
+                
+                console.log('✓ KPI cards updated');
+            } catch (error) {
+                console.error('Error updating KPI cards:', error);
+            }
+        }
+
+        // ============================================
+        // AIR QUALITY STATUS DETERMINATION
+        // ============================================
+        function getAirQualityStatus(value) {
+            if (value <= 35) return 'Good';
+            if (value <= 75) return 'Moderate';
+            if (value <= 115) return 'High';
+            return 'Very High';
+        }
+
+        // ============================================
+        // NOISE STATUS DETERMINATION
+        // ============================================
+        function getNoiseStatus(value) {
+            if (value <= 65) return 'Good';
+            if (value <= 75) return 'Moderate';
+            if (value <= 85) return 'High';
+            return 'Very High';
+        }
+
+        // ============================================
+        // INITIALIZE CHARTS WITH REAL DATA
+        // ============================================
+        function initializeCharts(airQualityData, noiseData) {
+            try {
+                console.log('Initializing charts...');
+                
+                // Prepare chart data - last 7 days
+                const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                const pm25Values = airQualityData.slice(-7).map(d => parseFloat(d.pm25 || 0));
+                const no2Values = airQualityData.slice(-7).map(d => parseFloat(d.no2 || 0));
+                const noiseValues = noiseData.slice(-7).map(d => parseFloat(d.noise_level || 0));
+
+                // Destroy existing charts if they exist
+                if (chartInstances.airQuality) chartInstances.airQuality.destroy();
+                if (chartInstances.noise) chartInstances.noise.destroy();
+                if (chartInstances.comparison) chartInstances.comparison.destroy();
+
+                const chartOptions = {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 15,
+                                font: { size: 13, weight: '500' }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 13 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+                            ticks: { color: 'rgba(0, 0, 0, 0.7)', font: { size: 12 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+                            ticks: { color: 'rgba(0, 0, 0, 0.7)', font: { size: 12 } },
+                            beginAtZero: true
+                        }
+                    }
+                };
+
+                // Air Quality Chart
+                const airQualityCtx = document.getElementById('airQualityChart');
+                chartInstances.airQuality = new Chart(airQualityCtx, {
+                    type: 'line',
+                    data: {
+                        labels: days,
+                        datasets: [
+                            {
+                                label: 'PM2.5 (μg/m³)',
+                                data: pm25Values,
+                                borderColor: 'rgb(255, 159, 64)',
+                                backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 5,
+                                pointBackgroundColor: 'rgb(255, 159, 64)',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            },
+                            {
+                                label: 'NO₂ (ppb)',
+                                data: no2Values,
+                                borderColor: 'rgb(54, 162, 235)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 5,
+                                pointBackgroundColor: 'rgb(54, 162, 235)',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            }
+                        ]
+                    },
+                    options: chartOptions
+                });
+
+                // Noise Chart
+                const noiseCtx = document.getElementById('noiseChart');
+                chartInstances.noise = new Chart(noiseCtx, {
+                    type: 'line',
+                    data: {
+                        labels: days,
+                        datasets: [
+                            {
+                                label: 'Noise Level (dB(A))',
+                                data: noiseValues,
+                                borderColor: 'rgb(255, 99, 132)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                                borderWidth: 3,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 5,
+                                pointBackgroundColor: 'rgb(255, 99, 132)',
+                                pointBorderColor: '#fff',
+                                pointBorderWidth: 2
+                            }
+                        ]
+                    },
+                    options: chartOptions
+                });
+
+                // Comparison Chart
+                const comparisonCtx = document.getElementById('comparisonChart');
+                chartInstances.comparison = new Chart(comparisonCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: days,
+                        datasets: [
+                            {
+                                label: 'PM2.5 (μg/m³)',
+                                data: pm25Values,
+                                backgroundColor: 'rgba(255, 159, 64, 0.7)',
+                                borderColor: 'rgb(255, 159, 64)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'Noise Level (dB(A))',
+                                data: noiseValues,
+                                backgroundColor: 'rgba(255, 99, 132, 0.7)',
+                                borderColor: 'rgb(255, 99, 132)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: chartOptions
+                });
+
+                console.log('✓ Charts initialized successfully');
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+            }
+        }
+
+        // ============================================
+        // POPULATE DATA TABLE
+        // ============================================
+        function populateDataTable(airQualityData, noiseData) {
+            try {
+                console.log('Populating data table...');
+                
+                const tbody = document.getElementById('dataTableBody');
+                tbody.innerHTML = ''; // Clear existing rows
+                
+                // Combine and sort data
+                const sites = ['north', 'central', 'south', 'east', 'west'];
+                
+                sites.forEach((site, index) => {
+                    const airData = airQualityData[index] || {};
+                    const noiseDataRow = noiseData[index] || {};
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${site.charAt(0).toUpperCase() + site.slice(1)} Braybrook</td>
+                        <td>${airData.timestamp || 'N/A'}</td>
+                        <td>${airData.pm25 ? parseFloat(airData.pm25).toFixed(1) : 'N/A'}</td>
+                        <td>${airData.no2 ? parseFloat(airData.no2).toFixed(1) : 'N/A'}</td>
+                        <td>${noiseDataRow.noise_level ? parseFloat(noiseDataRow.noise_level).toFixed(1) : 'N/A'}</td>
+                        <td>${airData.temperature ? parseFloat(airData.temperature).toFixed(1) + '°C' : 'N/A'}</td>
+                        <td><span class="status-badge status-${getAirQualityStatus(parseFloat(airData.pm25 || 0)).toLowerCase()}">${getAirQualityStatus(parseFloat(airData.pm25 || 0))}</span></td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+                console.log('✓ Data table populated');
+            } catch (error) {
+                console.error('Error populating data table:', error);
+            }
+        }
+
+        // ============================================
+        // LOADING & ERROR STATES
+        // ============================================
+        function showLoadingState(show) {
+            document.getElementById('dataLoading').classList.toggle('show', show);
+        }
+
+        function showErrorState(message) {
+            const errorDiv = document.getElementById('dataError');
+            document.getElementById('errorMessage').textContent = message;
+            errorDiv.classList.add('show');
+            showLoadingState(false);
+        }
+
+        // Apply filters button
+        document.getElementById('applyFilters').addEventListener('click', function() {
+            const site = document.getElementById('siteSelector').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            console.log('Filters applied:', { site, startDate, endDate });
+            // In future, fetch filtered data from CloudFront or backend API
+            alert('Filter functionality coming soon! (Requires backend API)');
+        });
+
+        console.log('=== DASHBOARD SCRIPT INITIALIZED ===');
+    </script>
 </body>
 </html>
