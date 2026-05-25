@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-leaf"></i>
+                <span>Smart City Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link active">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="login-form-container">
+                <h2>Admin Login</h2>
+                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <div id="loginError" class="error-message" style="display:none;"></div>
+                    <button type="submit" class="btn-primary">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <h1>Environmental Reports - Braybrook</h1>
+
+            <!-- Report Generation Section -->
+            <div class="report-section">
+                <h2>Generate Report</h2>
+                <div class="report-controls">
+                    <div class="control-group">
+                        <label for="reportDatasetType">Dataset Type:</label>
+                        <select id="reportDatasetType">
+                            <option value="">-- Select Dataset --</option>
+                            <option value="air-quality">Air Quality</option>
+                            <option value="noise">Noise</option>
+                            <option value="weather">Weather</option>
+                            <option value="traffic">Traffic</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="reportSite">Monitoring Site:</label>
+                        <select id="reportSite">
+                            <option value="all">All Sites</option>
+                            <option value="north">North Braybrook</option>
+                            <option value="central">Central Braybrook</option>
+                            <option value="south">South Braybrook</option>
+                            <option value="east">East Braybrook</option>
+                            <option value="west">West Braybrook</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="reportStartDate">Start Date:</label>
+                        <input type="date" id="reportStartDate">
+                    </div>
+                    <div class="control-group">
+                        <label for="reportEndDate">End Date:</label>
+                        <input type="date" id="reportEndDate">
+                    </div>
+                    <button class="btn-primary" id="generateReportBtn">Generate Report</button>
+                </div>
+            </div>
+
+            <!-- Report Summary Section -->
+            <div id="reportSummary" class="report-summary" style="display:none;">
+                <h2>Report Summary</h2>
+
+                <!-- High Risk Days -->
+                <div class="report-card" id="highRiskCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-exclamation-triangle"></i> High-Risk Days</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul id="highRiskDays">
+                            <!-- Populated by JavaScript -->
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Peak Pollution Periods -->
+                <div class="report-card" id="pollutionCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-wind"></i> Peak Pollution Periods</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Average PM2.5</th>
+                                    <th>Average NO₂</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pollutionTable">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Peak Noise Periods -->
+                <div class="report-card" id="noiseCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-volume-high"></i> Peak Noise Periods</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="report-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Average Noise Level</th>
+                                    <th>Peak Value</th>
+                                    <th>Risk Level</th>
+                                </tr>
+                            </thead>
+                            <tbody id="noiseTable">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Weather / Traffic Context -->
+                <div class="report-card" id="contextCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-cloud"></i> Weather & Traffic Context</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Average Temperature:</strong> <span id="avgTemp">N/A</span></p>
+                        <p><strong>Dominant Wind Direction:</strong> <span id="windDirection">N/A</span></p>
+                        <p><strong>Rainfall:</strong> <span id="rainfall">N/A</span></p>
+                        <p><strong>Average Humidity:</strong> <span id="avgHumidity">N/A</span></p>
+                        <p><strong>Average Wind Speed:</strong> <span id="avgWindSpeed">N/A</span></p>
+                        <p><strong>Average Traffic Density:</strong> <span id="trafficDensity">N/A</span></p>
+                        <p><strong>Peak Traffic Hours:</strong> <span id="peakHours">N/A</span></p>
+                    </div>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="export-buttons">
+                    <button class="btn-primary" id="exportPdfBtn">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                    <button class="btn-secondary" id="exportCsvBtn">
+                        <i class="fas fa-file-csv"></i> Export as CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Help Text -->
+            <div class="help-section">
+                <p><strong>Note:</strong> This is a frontend prototype. Export functions are placeholders. In the live system, these will generate real PDF/CSV files from the backend API.</p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+    <script>
+        // ============================================
+        // REPORTS PAGE — REAL DATA FROM CLOUDFRONT
+        // ============================================
+        // Fetches cleaned CSVs from CloudFront for all four datasets,
+        // filters by date range and site, then computes:
+        //   - High-risk days (any metric crosses safety threshold)
+        //   - Peak pollution periods (worst hour-of-day windows)
+        //   - Peak noise periods (worst hour-of-day windows)
+        //   - Weather & traffic context (averages, dominant patterns)
+        // ============================================
+
+        const CLOUDFRONT_BASE_URL = 'https://d2kx23ryzydc3y.cloudfront.net';
+        const DATASETS = ['air-quality', 'noise', 'weather', 'traffic'];
+
+        // Thresholds for "high risk" days (loosely aligned with AU/WHO guidance)
+        const THRESHOLDS = {
+            pm25:  75,   // μg/m³ — daily average above this is high risk
+            pm10:  100,
+            no2:   100,  // ppb
+            aqi:   100,
+            noise: 80    // dB(A)
+        };
+
+        // ============================================
+        // SHARED HELPERS (mirrored from dashboard.html)
+        // ============================================
+        const COLUMN_ALIASES = {
+            datetime:    ['datetime','date','timestamp','time','dateaustraliasydney','datetimeutc','datetimelocal'],
+            site:        ['site','location','station','sitename','sensor','sensorid'],
+            noise:       ['noise','sound','soundlevel','noiselevel','laeq','db','decibel','dba'],
+            frequency:   ['frequency','hz','freq'],
+            pm25:        ['pm25','pm2_5','pm25ugm3','pm2_5ugm3'],
+            pm10:        ['pm10','pm_10','pm10ugm3'],
+            aqi:         ['aqi','aqilasthour','aqilast1hr','airqualityindex'],
+            no2:         ['no2','no_2','no2lasthour','nitrogendioxide'],
+            co2:         ['co2','carbondioxide'],
+            temperature: ['temperature','temp','airtemperature','tempc'],
+            humidity:    ['humidity','relativehumidity','rh'],
+            windspeed:   ['windspeed','wind','wind_speed','windspeedms'],
+            winddir:     ['winddirection','wind_dir','winddir','bearing'],
+            rainfall:    ['rainfall','rain','precipitation','precip'],
+            vehiclecount:['vehiclecount','vehicles','cars','count','trafficcount'],
+            averagespeed:['averagespeed','avgspeed','speed','meanspeed']
+        };
+
+        const normalizeKey = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+
+        function resolveColumns(headers) {
+            const normalized = headers.map(h => ({ raw: h, norm: normalizeKey(h) }));
+            const map = {};
+            for (const [c, aliases] of Object.entries(COLUMN_ALIASES)) {
+                const na = aliases.map(normalizeKey);
+                const hit = normalized.find(h => na.includes(h.norm));
+                if (hit) map[c] = hit.raw;
+            }
+            return map;
+        }
+
+        function parseDateValue(v) {
+            if (v === null || v === undefined || v === '') return null;
+            if (typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(String(v).trim())) {
+                const n = Number(v);
+                if (n > 1e12) return new Date(n);
+                if (n > 1e9)  return new Date(n*1000);
+            }
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function toNum(v) {
+            if (v === null || v === undefined || v === '') return NaN;
+            const n = parseFloat(v);
+            return isFinite(n) ? n : NaN;
+        }
+
+        function splitCSVLine(line) {
+            const out = []; let cur = ''; let inQ = false;
+            for (let i = 0; i < line.length; i++) {
+                const ch = line[i];
+                if (ch === '"') {
+                    if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+                    else inQ = !inQ;
+                } else if (ch === ',' && !inQ) { out.push(cur); cur = ''; }
+                else cur += ch;
+            }
+            out.push(cur);
+            return out;
+        }
+
+        function parseCSV(csvText) {
+            const text = csvText.replace(/^\uFEFF/, '');
+            const lines = text.split(/\r?\n/).filter(l => l.length > 0);
+            if (lines.length < 2) return { headers: [], data: [] };
+            const headers = splitCSVLine(lines[0]).map(h => h.trim());
+            const data = [];
+            for (let i = 1; i < lines.length; i++) {
+                const values = splitCSVLine(lines[i]);
+                if (values.length === 0) continue;
+                const row = {};
+                headers.forEach((h, idx) => {
+                    const raw = (values[idx] !== undefined ? values[idx] : '').trim();
+                    if (raw !== '' && /^-?\d+(\.\d+)?(e[-+]?\d+)?$/i.test(raw)) row[h] = parseFloat(raw);
+                    else row[h] = raw;
+                });
+                data.push(row);
+            }
+            return { headers, data };
+        }
+
+        async function fetchDataset(datasetType) {
+            const url = `${CLOUDFRONT_BASE_URL}/cleaned-data/${datasetType}/latest.csv`;
+            const res = await fetch(url, { cache: 'no-store' });
+            if (!res.ok) throw new Error(`${datasetType}: HTTP ${res.status}`);
+            const text = await res.text();
+            const { headers, data } = parseCSV(text);
+            const columnMap = resolveColumns(headers);
+            console.log(`[${datasetType}] columns:`, headers, 'resolved:', columnMap, 'rows:', data.length);
+            return { datasetType, headers, data, columnMap };
+        }
+
+        // ============================================
+        // FILTERING
+        // ============================================
+        function filterRows(rows, columnMap, startDate, endDate, siteFilter) {
+            const start = startDate ? new Date(startDate + 'T00:00:00') : null;
+            const end   = endDate   ? new Date(endDate   + 'T23:59:59') : null;
+            const wantSite = (siteFilter && siteFilter !== 'all') ? normalizeKey(siteFilter) : null;
+
+            return rows.filter(r => {
+                if (columnMap.datetime) {
+                    const d = parseDateValue(r[columnMap.datetime]);
+                    if (!d) return false;
+                    if (start && d < start) return false;
+                    if (end   && d > end)   return false;
+                }
+                if (wantSite && columnMap.site) {
+                    const s = normalizeKey(r[columnMap.site]);
+                    if (!s.includes(wantSite)) return false;
+                }
+                return true;
+            });
+        }
+
+        // ============================================
+        // ANALYTICS
+        // ============================================
+        const mean = (xs) => {
+            const v = xs.filter(x => isFinite(x));
+            return v.length ? v.reduce((a,b)=>a+b,0)/v.length : NaN;
+        };
+        const max = (xs) => {
+            const v = xs.filter(x => isFinite(x));
+            return v.length ? Math.max(...v) : NaN;
+        };
+
+        // Group rows by YYYY-MM-DD
+        function groupByDay(rows, columnMap) {
+            const groups = {};
+            for (const r of rows) {
+                const d = parseDateValue(r[columnMap.datetime]);
+                if (!d) continue;
+                const key = d.toISOString().slice(0, 10);
+                (groups[key] = groups[key] || []).push(r);
+            }
+            return groups;
+        }
+
+        // Group rows by hour-of-day (0..23)
+        function groupByHour(rows, columnMap) {
+            const groups = {};
+            for (const r of rows) {
+                const d = parseDateValue(r[columnMap.datetime]);
+                if (!d) continue;
+                const h = d.getHours();
+                (groups[h] = groups[h] || []).push(r);
+            }
+            return groups;
+        }
+
+        function fmtHourRange(h) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${pad(h)}:00–${pad((h+1)%24)}:00`;
+        }
+
+        // High-risk days: any metric crosses a threshold on a daily-average basis
+        function findHighRiskDays(airRows, airMap, noiseRows, noiseMap) {
+            const days = {};
+            const note = (date, reason, value) => {
+                (days[date] = days[date] || []).push({ reason, value });
+            };
+
+            if (airRows.length && airMap.datetime) {
+                const byDay = groupByDay(airRows, airMap);
+                for (const [date, rs] of Object.entries(byDay)) {
+                    if (airMap.pm25) {
+                        const avg = mean(rs.map(r => toNum(r[airMap.pm25])));
+                        if (isFinite(avg) && avg > THRESHOLDS.pm25)
+                            note(date, `PM2.5 daily avg exceeded ${THRESHOLDS.pm25} μg/m³`, `${avg.toFixed(1)} μg/m³`);
+                    }
+                    if (airMap.pm10) {
+                        const avg = mean(rs.map(r => toNum(r[airMap.pm10])));
+                        if (isFinite(avg) && avg > THRESHOLDS.pm10)
+                            note(date, `PM10 daily avg exceeded ${THRESHOLDS.pm10} μg/m³`, `${avg.toFixed(1)} μg/m³`);
+                    }
+                    if (airMap.no2) {
+                        const avg = mean(rs.map(r => toNum(r[airMap.no2])));
+                        if (isFinite(avg) && avg > THRESHOLDS.no2)
+                            note(date, `NO₂ daily avg exceeded ${THRESHOLDS.no2} ppb`, `${avg.toFixed(1)} ppb`);
+                    }
+                    if (airMap.aqi) {
+                        const avg = mean(rs.map(r => toNum(r[airMap.aqi])));
+                        if (isFinite(avg) && avg > THRESHOLDS.aqi)
+                            note(date, `AQI daily avg exceeded ${THRESHOLDS.aqi}`, avg.toFixed(0));
+                    }
+                }
+            }
+
+            if (noiseRows.length && noiseMap.datetime && noiseMap.noise) {
+                const byDay = groupByDay(noiseRows, noiseMap);
+                for (const [date, rs] of Object.entries(byDay)) {
+                    const peak = max(rs.map(r => toNum(r[noiseMap.noise])));
+                    if (isFinite(peak) && peak > THRESHOLDS.noise)
+                        note(date, `Noise peak exceeded ${THRESHOLDS.noise} dB(A)`, `${peak.toFixed(1)} dB(A)`);
+                }
+            }
+
+            // Flatten to a sorted list
+            return Object.entries(days)
+                .sort(([a],[b]) => a.localeCompare(b))
+                .flatMap(([date, items]) => items.map(it => ({ date, ...it })));
+        }
+
+        // Top N hour-of-day windows by combined air-quality severity
+        function peakPollutionPeriods(rows, columnMap, n = 5) {
+            if (!rows.length || !columnMap.datetime) return [];
+            const byHour = groupByHour(rows, columnMap);
+            const out = [];
+            for (const [h, rs] of Object.entries(byHour)) {
+                const pm25Avg = columnMap.pm25 ? mean(rs.map(r => toNum(r[columnMap.pm25]))) : NaN;
+                const no2Avg  = columnMap.no2  ? mean(rs.map(r => toNum(r[columnMap.no2])))  : NaN;
+                // Severity = normalized sum; if both missing, skip
+                const sev = (isFinite(pm25Avg) ? pm25Avg / THRESHOLDS.pm25 : 0)
+                          + (isFinite(no2Avg)  ? no2Avg  / THRESHOLDS.no2  : 0);
+                if (sev <= 0) continue;
+                let status;
+                const worst = Math.max(
+                    isFinite(pm25Avg) ? pm25Avg / THRESHOLDS.pm25 : 0,
+                    isFinite(no2Avg)  ? no2Avg  / THRESHOLDS.no2  : 0
+                );
+                if (worst >= 1)      status = 'High';
+                else if (worst >= 0.5) status = 'Moderate';
+                else                 status = 'Good';
+                out.push({ hour: +h, pm25: pm25Avg, no2: no2Avg, status });
+            }
+            return out.sort((a,b) => {
+                const aSev = (isFinite(a.pm25)?a.pm25/THRESHOLDS.pm25:0)+(isFinite(a.no2)?a.no2/THRESHOLDS.no2:0);
+                const bSev = (isFinite(b.pm25)?b.pm25/THRESHOLDS.pm25:0)+(isFinite(b.no2)?b.no2/THRESHOLDS.no2:0);
+                return bSev - aSev;
+            }).slice(0, n);
+        }
+
+        // Top N hour-of-day windows by noise level
+        function peakNoisePeriods(rows, columnMap, n = 5) {
+            if (!rows.length || !columnMap.datetime || !columnMap.noise) return [];
+            const byHour = groupByHour(rows, columnMap);
+            const out = [];
+            for (const [h, rs] of Object.entries(byHour)) {
+                const vals = rs.map(r => toNum(r[columnMap.noise]));
+                const avg = mean(vals);
+                const peak = max(vals);
+                if (!isFinite(avg)) continue;
+                let risk;
+                if (peak >= 80)      risk = 'High';
+                else if (peak >= 70) risk = 'Moderate';
+                else                 risk = 'Good';
+                out.push({ hour: +h, avg, peak, risk });
+            }
+            return out.sort((a,b) => b.peak - a.peak).slice(0, n);
+        }
+
+        // Compass direction from degrees
+        function compassFromDeg(deg) {
+            if (!isFinite(deg)) return null;
+            const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+            const idx = Math.round(((deg % 360) / 45)) % 8;
+            return dirs[idx];
+        }
+
+        function weatherContext(rows, columnMap) {
+            const ctx = { avgTemp: 'N/A', windDir: 'N/A', rainfall: 'N/A', avgHumidity: 'N/A', avgWindSpeed: 'N/A' };
+            if (!rows.length) return ctx;
+            if (columnMap.temperature) {
+                const v = mean(rows.map(r => toNum(r[columnMap.temperature])));
+                if (isFinite(v)) ctx.avgTemp = `${v.toFixed(1)} °C`;
+            }
+            if (columnMap.humidity) {
+                const v = mean(rows.map(r => toNum(r[columnMap.humidity])));
+                if (isFinite(v)) ctx.avgHumidity = `${v.toFixed(1)} %`;
+            }
+            if (columnMap.windspeed) {
+                const v = mean(rows.map(r => toNum(r[columnMap.windspeed])));
+                if (isFinite(v)) ctx.avgWindSpeed = `${v.toFixed(1)} m/s`;
+            }
+            if (columnMap.winddir) {
+                const degs = rows.map(r => toNum(r[columnMap.winddir])).filter(isFinite);
+                if (degs.length) {
+                    // Circular mean (avg sin/cos components, then atan2)
+                    const rad = degs.map(d => d * Math.PI / 180);
+                    const sinSum = rad.reduce((a,r)=>a+Math.sin(r),0)/rad.length;
+                    const cosSum = rad.reduce((a,r)=>a+Math.cos(r),0)/rad.length;
+                    let avgDeg = Math.atan2(sinSum, cosSum) * 180 / Math.PI;
+                    if (avgDeg < 0) avgDeg += 360;
+                    ctx.windDir = `${compassFromDeg(avgDeg)} (${avgDeg.toFixed(0)}°)`;
+                }
+            }
+            if (columnMap.rainfall) {
+                const vals = rows.map(r => toNum(r[columnMap.rainfall])).filter(isFinite);
+                if (vals.length) ctx.rainfall = `${vals.reduce((a,b)=>a+b,0).toFixed(1)} mm`;
+            }
+            return ctx;
+        }
+
+        function trafficContext(rows, columnMap) {
+            const ctx = { density: 'N/A', peakHours: 'N/A' };
+            if (!rows.length || !columnMap.datetime || !columnMap.vehiclecount) return ctx;
+
+            const byHour = groupByHour(rows, columnMap);
+            const avgByHour = Object.entries(byHour).map(([h, rs]) => ({
+                hour: +h,
+                avg: mean(rs.map(r => toNum(r[columnMap.vehiclecount])))
+            })).filter(x => isFinite(x.avg));
+
+            if (avgByHour.length === 0) return ctx;
+
+            const overall = mean(avgByHour.map(x => x.avg));
+            ctx.density = overall < 50 ? 'Low' : overall < 200 ? 'Moderate' : 'High';
+
+            // Pick top 3 hours by avg vehicle count, formatted as a comma list
+            const top = avgByHour.sort((a,b) => b.avg - a.avg).slice(0, 3).sort((a,b)=>a.hour-b.hour);
+            ctx.peakHours = top.map(x => fmtHourRange(x.hour)).join(', ');
+            return ctx;
+        }
+
+        // ============================================
+        // RENDERING
+        // ============================================
+        function renderHighRiskDays(items) {
+            const ul = document.getElementById('highRiskDays');
+            if (!items.length) {
+                ul.innerHTML = '<li style="color:#388e3c;"><i class="fas fa-check-circle"></i> No high-risk days detected in this period.</li>';
+                return;
+            }
+            ul.innerHTML = items.map(it =>
+                `<li><strong>${it.date}</strong> — ${it.reason} <em>(${it.value})</em></li>`
+            ).join('');
+        }
+
+        function renderPollutionTable(periods) {
+            const tbody = document.getElementById('pollutionTable');
+            if (!periods.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#757575;">No air-quality data in this period.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = periods.map(p => `
+                <tr>
+                    <td>${fmtHourRange(p.hour)}</td>
+                    <td>${isFinite(p.pm25) ? p.pm25.toFixed(1) : 'N/A'}</td>
+                    <td>${isFinite(p.no2)  ? p.no2.toFixed(1)  : 'N/A'}</td>
+                    <td><span class="status-badge status-${p.status.toLowerCase()}">${p.status}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderNoiseTable(periods) {
+            const tbody = document.getElementById('noiseTable');
+            if (!periods.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#757575;">No noise data in this period.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = periods.map(p => `
+                <tr>
+                    <td>${fmtHourRange(p.hour)}</td>
+                    <td>${p.avg.toFixed(1)} dB(A)</td>
+                    <td>${p.peak.toFixed(1)} dB(A)</td>
+                    <td><span class="status-badge status-${p.risk.toLowerCase()}">${p.risk}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderContext(weather, traffic) {
+            document.getElementById('avgTemp').textContent        = weather.avgTemp;
+            document.getElementById('windDirection').textContent  = weather.windDir;
+            document.getElementById('rainfall').textContent       = weather.rainfall;
+            document.getElementById('avgHumidity').textContent    = weather.avgHumidity || 'N/A';
+            document.getElementById('avgWindSpeed').textContent   = weather.avgWindSpeed || 'N/A';
+            document.getElementById('trafficDensity').textContent = traffic.density;
+            document.getElementById('peakHours').textContent      = traffic.peakHours;
+        }
+
+        // ============================================
+        // CSV EXPORT (real, client-side)
+        // ============================================
+        let lastReportSnapshot = null;  // { datasets: { air: {...}, noise: {...}, ... }, filters: {...} }
+
+        function exportCSV() {
+            if (!lastReportSnapshot) { alert('Generate a report first.'); return; }
+            const { datasets, filters } = lastReportSnapshot;
+            const parts = [];
+            parts.push(`# Smart City Monitor — Report Export`);
+            parts.push(`# Generated: ${new Date().toISOString()}`);
+            parts.push(`# Site: ${filters.site}   Range: ${filters.startDate} → ${filters.endDate}`);
+            for (const [name, ds] of Object.entries(datasets)) {
+                if (!ds || !ds.rows.length) continue;
+                parts.push('');
+                parts.push(`# === ${name} (${ds.rows.length} rows) ===`);
+                parts.push(ds.headers.join(','));
+                for (const r of ds.rows) {
+                    parts.push(ds.headers.map(h => {
+                        const v = r[h];
+                        if (v === undefined || v === null) return '';
+                        const s = String(v);
+                        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+                    }).join(','));
+                }
+            }
+            const blob = new Blob([parts.join('\n')], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `report_${filters.datasetType || 'data'}_${filters.site}_${filters.startDate}_${filters.endDate}.csv`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportPDF() {
+            alert('PDF Export\n\nReal PDF generation requires a library like jsPDF. The CSV export is fully functional — click "Export as CSV" to download all report data.');
+        }
+
+        // ============================================
+        // MAIN HANDLER
+        // ============================================
+        // Card visibility per dataset type
+        function showCardsForDataset(datasetType) {
+            const cards = {
+                highRiskCard:  ['air-quality', 'noise'].includes(datasetType),
+                pollutionCard: datasetType === 'air-quality',
+                noiseCard:     datasetType === 'noise',
+                contextCard:   ['weather', 'traffic'].includes(datasetType)
+            };
+            for (const [id, show] of Object.entries(cards)) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = show ? '' : 'none';
+            }
+        }
+
+        // Show the actual data span in the console (helps debugging date mismatches)
+        function logDataSpan(ds) {
+            if (!ds.columnMap.datetime || !ds.data.length) {
+                console.warn(`[${ds.datasetType}] no datetime column or empty CSV — cannot compute span.`);
+                return null;
+            }
+            const dates = ds.data.map(r => parseDateValue(r[ds.columnMap.datetime])).filter(Boolean);
+            if (!dates.length) {
+                console.warn(`[${ds.datasetType}] datetime column "${ds.columnMap.datetime}" produced no parseable dates. Sample:`,
+                             ds.data[0][ds.columnMap.datetime]);
+                return null;
+            }
+            const min = new Date(Math.min(...dates));
+            const max = new Date(Math.max(...dates));
+            console.log(`[${ds.datasetType}] data spans ${min.toISOString().slice(0,10)} → ${max.toISOString().slice(0,10)} (${dates.length} dated rows)`);
+            return { min, max };
+        }
+
+        document.getElementById('generateReportBtn').addEventListener('click', async function () {
+            const datasetType = document.getElementById('reportDatasetType').value;
+            const site        = document.getElementById('reportSite').value;
+            const startDate   = document.getElementById('reportStartDate').value;
+            const endDate     = document.getElementById('reportEndDate').value;
+
+            if (!datasetType) { alert('Please select a dataset type.'); return; }
+            if (!startDate || !endDate) { alert('Please select both start and end dates.'); return; }
+
+            const btn = this;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Generating…';
+
+            console.log('=== GENERATE REPORT ===', { datasetType, site, startDate, endDate });
+
+            try {
+                // Fetch ONLY the selected dataset (no more 403s for missing files)
+                let ds;
+                try {
+                    ds = await fetchDataset(datasetType);
+                } catch (err) {
+                    alert(`Could not load "${datasetType}" data.\n\n${err.message}\n\nThe file may not exist in S3 yet. Check that ${datasetType}/latest.csv has been uploaded.`);
+                    return;
+                }
+
+                // Diagnostic: where does the data actually live in time?
+                const span = logDataSpan(ds);
+
+                // Filter
+                const rows = filterRows(ds.data, ds.columnMap, startDate, endDate, site);
+                console.log(`[${datasetType}] ${rows.length} of ${ds.data.length} rows after filter`);
+
+                const filtered = { ...ds, rows };
+
+                if (rows.length === 0) {
+                    let hint = '';
+                    if (span) {
+                        hint = `\n\nData actually spans:\n${span.min.toISOString().slice(0,10)} → ${span.max.toISOString().slice(0,10)}\n\nYour selected range:\n${startDate} → ${endDate}\n\nThe ranges don't overlap. Adjust your dates to match the data.`;
+                    } else if (site && site !== 'all' && !ds.columnMap.site) {
+                        hint = `\n\nThe CSV has no site column, so the "${site}" site filter dropped everything. Try "All Sites".`;
+                    } else {
+                        hint = '\n\nCheck console logs for column resolution details.';
+                    }
+                    alert(`No rows matched.${hint}`);
+                    return;
+                }
+
+                // Set up empty stubs for the dataset types we didn't fetch — keeps
+                // existing renderers happy without showing stale data.
+                const empty = (t) => ({ datasetType: t, headers: [], data: [], columnMap: {}, rows: [] });
+                const air     = datasetType === 'air-quality' ? filtered : empty('air-quality');
+                const noise   = datasetType === 'noise'       ? filtered : empty('noise');
+                const weather = datasetType === 'weather'     ? filtered : empty('weather');
+                const traffic = datasetType === 'traffic'     ? filtered : empty('traffic');
+
+                // Show/hide cards based on what we actually have
+                showCardsForDataset(datasetType);
+
+                // Compute and render relevant sections
+                if (datasetType === 'air-quality') {
+                    renderHighRiskDays(findHighRiskDays(air.rows, air.columnMap, [], {}));
+                    renderPollutionTable(peakPollutionPeriods(air.rows, air.columnMap, 5));
+                } else if (datasetType === 'noise') {
+                    renderHighRiskDays(findHighRiskDays([], {}, noise.rows, noise.columnMap));
+                    renderNoiseTable(peakNoisePeriods(noise.rows, noise.columnMap, 5));
+                } else if (datasetType === 'weather') {
+                    renderContext(weatherContext(weather.rows, weather.columnMap), { density: 'N/A', peakHours: 'N/A' });
+                } else if (datasetType === 'traffic') {
+                    renderContext({ avgTemp: 'N/A', windDir: 'N/A', rainfall: 'N/A' }, trafficContext(traffic.rows, traffic.columnMap));
+                }
+
+                // Stash for CSV export
+                lastReportSnapshot = {
+                    filters: { datasetType, site, startDate, endDate },
+                    datasets: { [datasetType]: filtered }
+                };
+
+                document.getElementById('reportSummary').style.display = 'block';
+                document.getElementById('reportSummary').scrollIntoView({ behavior: 'smooth' });
+            } catch (err) {
+                console.error('Report generation failed:', err);
+                alert('Report generation failed: ' + (err.message || err));
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+
+        document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
+        document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
+
+        // Set default date range to last 7 days
+        const endDate = new Date();
+        const startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 7);
+        document.getElementById('reportStartDate').valueAsDate = startDate;
+        document.getElementById('reportEndDate').valueAsDate = endDate;
+
+        console.log('=== REPORTS SCRIPT INITIALIZED ===');
+    </script>
+</body>
+</html>
