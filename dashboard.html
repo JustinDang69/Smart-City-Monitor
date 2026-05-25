@@ -366,7 +366,7 @@
         async function fetchCleanedCSV(datasetType) {
             try {
                 const filename = datasetFileMap[datasetType];
-                const url = `${CLOUDFRONT_BASE_URL}/cleaned-data/${datasetType}/${filename}_cleaned.csv`;
+                const url = `${CLOUDFRONT_BASE_URL}/cleaned-data/${datasetType}/latest.csv`;
                 
                 console.log('Fetching from CloudFront:', url);
                 
