@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Smart Air and Noise Quality Monitoring System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        .loading-spinner { display:inline-block; width:20px; height:20px; border:3px solid #f3f3f3; border-top:3px solid #2e7d32; border-radius:50%; animation:spin 1s linear infinite; margin-right:10px; }
+        @keyframes spin { 0%{transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+        .data-loading, .data-error { display:none; padding:20px; border-radius:4px; margin-bottom:20px; }
+        .data-loading { background:#e3f2fd; text-align:center; }
+        .data-error { background:#ffebee; border-left:4px solid #d32f2f; color:#c62828; }
+        .show { display:block !important; }
+        .control-pills { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+        .control-pill { padding:8px 14px; border:1px solid #ccc; background:#fff; border-radius:20px; cursor:pointer; font-size:13px; transition:all 0.2s; }
+        .control-pill:hover:not(:disabled) { border-color:#2e7d32; }
+        .control-pill.active { background:#2e7d32; color:#fff; border-color:#2e7d32; }
+        .control-pill:disabled { opacity:0.4; cursor:not-allowed; }
+        .control-label { font-weight:600; font-size:13px; color:#555; margin-bottom:6px; display:block; }
+        .control-row { margin-bottom:12px; }
+        .custom-dates { display:none; gap:10px; align-items:center; margin-top:8px; }
+        .custom-dates.show { display:flex; flex-wrap:wrap; }
+        .custom-dates input { padding:6px 10px; border:1px solid #ccc; border-radius:4px; }
+        .chart-analysis { margin-top:15px; padding:12px 16px; background:#f5f7f8; border-left:3px solid #2e7d32; border-radius:4px; font-size:14px; line-height:1.5; color:#333; }
+        .chart-analysis.empty { background:#fff3e0; border-left-color:#f57c00; color:#666; font-style:italic; }
+        .empty-dataset { padding:40px 20px; text-align:center; background:#fafafa; border-radius:4px; color:#888; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo"><i class="fas fa-leaf"></i><span>Smart City Monitor</span></div>
+            <ul class="nav-menu">
+                <li><a href="index.html" class="nav-link">Home</a></li>
+                <li><a href="dashboard.html" class="nav-link active">Dashboard</a></li>
+                <li><a href="reports.html" class="nav-link">Reports</a></li>
+                <li><a href="admin.html" class="nav-link">Admin Upload</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+            </ul>
+            <div class="hamburger"><span></span><span></span><span></span></div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="container">
+            <h1>Environmental Dashboard - Braybrook</h1>
+
+            <div id="dataLoading" class="data-loading"><div class="loading-spinner"></div><span id="loadingMessage">Loading data...</span></div>
+            <div id="dataError" class="data-error"><i class="fas fa-exclamation-circle"></i> <span id="errorMessage"></span></div>
+
+            <!-- Filter Section -->
+            <div class="filter-section" style="flex-direction:column; align-items:stretch;">
+                <div class="control-row">
+                    <label class="control-label">Dataset Type</label>
+                    <div class="control-pills" id="datasetPills">
+                        <button class="control-pill active" data-dataset="air-quality">Air Quality</button>
+                        <button class="control-pill" data-dataset="noise">Noise</button>
+                        <button class="control-pill" data-dataset="weather">Weather</button>
+                        <button class="control-pill" data-dataset="traffic">Traffic</button>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label class="control-label">Monitoring Site</label>
+                    <div class="control-pills" id="sitePills">
+                        <button class="control-pill active" data-site="all">All Sites</button>
+                        <button class="control-pill" data-site="north">North</button>
+                        <button class="control-pill" data-site="central">Central</button>
+                        <button class="control-pill" data-site="south">South</button>
+                        <button class="control-pill" data-site="east">East</button>
+                        <button class="control-pill" data-site="west">West</button>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label class="control-label">Time Range</label>
+                    <div class="control-pills" id="rangePills">
+                        <button class="control-pill" data-range="7d">7 days</button>
+                        <button class="control-pill" data-range="1m">1 month</button>
+                        <button class="control-pill" data-range="3m">3 months</button>
+                        <button class="control-pill active" data-range="6m">6 months</button>
+                        <button class="control-pill" data-range="1y">1 year</button>
+                        <button class="control-pill" data-range="all">All time</button>
+                        <button class="control-pill" data-range="custom">Custom</button>
+                    </div>
+                    <div class="custom-dates" id="customDates">
+                        <label>From: <input type="date" id="startDate"></label>
+                        <label>To: <input type="date" id="endDate"></label>
+                    </div>
+                </div>
+                <div class="control-row">
+                    <label class="control-label">Aggregation</label>
+                    <div class="control-pills" id="aggPills">
+                        <button class="control-pill" data-agg="hour">Hour</button>
+                        <button class="control-pill" data-agg="day">Day</button>
+                        <button class="control-pill active" data-agg="week">Week</button>
+                        <button class="control-pill" data-agg="month">Month</button>
+                    </div>
+                </div>
+                <div>
+                    <button class="btn-primary" id="applyFilters" style="padding:10px 24px;">Apply Filters</button>
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid" id="statsGrid"></div>
+
+            <!-- Charts Container -->
+            <div class="charts-container" id="chartsContainer"></div>
+
+            <!-- Data Table -->
+            <div class="table-section" id="tableSection" style="display:none;">
+                <h2>Recent Measurements (latest 10 rows)</h2>
+                <div class="table-wrapper"><table class="data-table"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer"><div class="container"><p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook</p></div></footer>
+
+    <script src="js/main.js"></script>
+    <script>
+    // ============================================
+    // DASHBOARD — Two-step fetch, time-scale charts, auto-aggregation, analysis text
+    // ============================================
+    const LIST_FILES_API = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/list-files';
+
+    // State
+    let state = {
+        datasetType: 'air-quality',
+        site: 'all',
+        range: '6m',
+        aggregation: 'week',
+        customStart: null,
+        customEnd: null
+    };
+    let chartInstances = {};
+
+    // ============================================
+    // PILL BUTTON HANDLERS
+    // ============================================
+    function setupPills(containerId, stateKey, callback) {
+        document.querySelectorAll(`#${containerId} .control-pill`).forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll(`#${containerId} .control-pill`).forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state[stateKey] = btn.dataset[stateKey] || btn.dataset.dataset || btn.dataset.site || btn.dataset.range || btn.dataset.agg;
+                if (callback) callback();
+            });
+        });
+    }
+
+    setupPills('datasetPills', 'datasetType');
+    setupPills('sitePills', 'site');
+    setupPills('rangePills', 'range', () => {
+        document.getElementById('customDates').classList.toggle('show', state.range === 'custom');
+        // Auto-pick default aggregation based on range
+        const defaultAgg = { '7d':'hour', '1m':'day', '3m':'day', '6m':'week', '1y':'week', 'all':'month', 'custom':'day' };
+        const def = defaultAgg[state.range];
+        if (def) {
+            document.querySelectorAll('#aggPills .control-pill').forEach(b => b.classList.toggle('active', b.dataset.agg === def));
+            state.aggregation = def;
+        }
+        updateAggDisabled();
+    });
+    setupPills('aggPills', 'aggregation');
+
+    function updateAggDisabled() {
+        // Disable aggregations that would produce too few/too many buckets
+        const days = rangeDays(state.range);
+        const buckets = { hour: days*24, day: days, week: days/7, month: days/30 };
+        document.querySelectorAll('#aggPills .control-pill').forEach(btn => {
+            const n = buckets[btn.dataset.agg];
+            btn.disabled = n < 3 || n > 1000;
+        });
+    }
+
+    function rangeDays(r) {
+        return { '7d':7, '1m':30, '3m':90, '6m':180, '1y':365, 'all':3650, 'custom': customDays() }[r];
+    }
+    function customDays() {
+        if (!state.customStart || !state.customEnd) return 30;
+        return Math.max(1, Math.round((new Date(state.customEnd) - new Date(state.customStart)) / 86400000));
+    }
+
+    document.getElementById('startDate').addEventListener('change', e => { state.customStart = e.target.value; updateAggDisabled(); });
+    document.getElementById('endDate').addEventListener('change', e => { state.customEnd = e.target.value; updateAggDisabled(); });
+
+    // Initial setup
+    updateAggDisabled();
+
+    // ============================================
+    // APPLY FILTERS — Main entry
+    // ============================================
+    document.getElementById('applyFilters').addEventListener('click', async () => {
+        showLoading('Fetching file list...');
+        hideError();
+        try {
+            const { startDate, endDate } = resolveDateRange();
+            console.log('Filters:', { ...state, startDate, endDate });
+
+            // Step 1: List matching files
+            const listUrl = `${LIST_FILES_API}?datasetType=${state.datasetType}&site=${state.site}&startDate=${startDate}&endDate=${endDate}`;
+            const listRes = await fetch(listUrl);
+            if (!listRes.ok) throw new Error(`list-files HTTP ${listRes.status}`);
+            const { files } = await listRes.json();
+            console.log(`Found ${files.length} matching files`);
+
+            if (files.length === 0) {
+                showLoading(false);
+                renderEmpty(`No ${state.datasetType} data found for site "${state.site}" in the selected period.`);
+                return;
+            }
+
+            // Step 2: Fetch all CSVs in parallel
+            showLoading(`Downloading ${files.length} file${files.length>1?'s':''}...`);
+            const csvTexts = await Promise.all(files.map(f => fetch(f.url).then(r => r.text())));
+
+            // Step 3: Combine rows
+            showLoading('Processing data...');
+            const allRows = [];
+            for (const csvText of csvTexts) {
+                const rows = parseCSV(csvText);
+                allRows.push(...rows);
+            }
+            console.log(`Combined ${allRows.length} total rows`);
+
+            // Step 4: Filter to date range, sort by datetime
+            const filtered = filterByDateRange(allRows, startDate, endDate);
+            filtered.sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+            // Step 5: Render
+            renderDashboard(filtered);
+            showLoading(false);
+        } catch (err) {
+            console.error(err);
+            showError(err.message);
+            showLoading(false);
+        }
+    });
+
+    function resolveDateRange() {
+        if (state.range === 'custom') {
+            return { startDate: state.customStart || '2024-01-01', endDate: state.customEnd || new Date().toISOString().slice(0,10) };
+        }
+        const end = new Date();
+        const start = new Date();
+        const days = rangeDays(state.range);
+        start.setDate(end.getDate() - days);
+        return { startDate: start.toISOString().slice(0,10), endDate: end.toISOString().slice(0,10) };
+    }
+
+    // ============================================
+    // CSV PARSING
+    // ============================================
+    function parseCSV(text) {
+        const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) return [];
+        const headers = lines[0].split(',').map(h => h.trim());
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',');
+            if (values.length !== headers.length) continue;
+            const row = {};
+            headers.forEach((h, idx) => {
+                const v = (values[idx] || '').trim();
+                row[h] = v === '' ? null : (isNaN(v) ? v : parseFloat(v));
+            });
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    function filterByDateRange(rows, startDate, endDate) {
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T23:59:59');
+        return rows.filter(r => {
+            if (!r.datetime) return false;
+            const d = new Date(r.datetime);
+            return !isNaN(d.getTime()) && d >= start && d <= end;
+        });
+    }
+
+    // ============================================
+    // AGGREGATION
+    // ============================================
+    function aggregateData(rows, columns, bucketType) {
+        const buckets = {};
+        for (const row of rows) {
+            if (!row.datetime) continue;
+            const d = new Date(row.datetime);
+            if (isNaN(d.getTime())) continue;
+            const key = bucketKey(d, bucketType);
+            if (!buckets[key]) buckets[key] = { datetime: bucketStartDate(d, bucketType), counts: {}, sums: {} };
+            for (const col of columns) {
+                const v = parseFloat(row[col]);
+                if (!isNaN(v)) {
+                    buckets[key].sums[col] = (buckets[key].sums[col] || 0) + v;
+                    buckets[key].counts[col] = (buckets[key].counts[col] || 0) + 1;
+                }
+            }
+        }
+        return Object.values(buckets).map(b => {
+            const out = { datetime: b.datetime };
+            for (const col of columns) out[col] = b.counts[col] ? b.sums[col] / b.counts[col] : null;
+            return out;
+        }).sort((a,b) => a.datetime - b.datetime);
+    }
+
+    function bucketKey(d, type) {
+        const y = d.getFullYear(), m = d.getMonth(), day = d.getDate(), h = d.getHours();
+        if (type === 'hour') return `${y}-${m}-${day}-${h}`;
+        if (type === 'day') return `${y}-${m}-${day}`;
+        if (type === 'week') { const w = new Date(d); w.setDate(d.getDate() - d.getDay()); return `${w.getFullYear()}-${w.getMonth()}-${w.getDate()}`; }
+        if (type === 'month') return `${y}-${m}`;
+    }
+    function bucketStartDate(d, type) {
+        const r = new Date(d);
+        if (type === 'hour') { r.setMinutes(0,0,0); }
+        else if (type === 'day') { r.setHours(0,0,0,0); }
+        else if (type === 'week') { r.setDate(d.getDate() - d.getDay()); r.setHours(0,0,0,0); }
+        else if (type === 'month') { r.setDate(1); r.setHours(0,0,0,0); }
+        return r;
+    }
+
+    // ============================================
+    // DATASET CONFIGS — defines columns, units, thresholds per dataset type
+    // ============================================
+    const datasetConfigs = {
+        'air-quality': {
+            kpis: [
+                { col: 'pm25', label: 'PM2.5', unit: 'μg/m³', threshold: { good: 25, mod: 75 } },
+                { col: 'pm10', label: 'PM10', unit: 'μg/m³', threshold: { good: 50, mod: 150 } },
+                { col: 'no2', label: 'NO₂', unit: 'ppb', threshold: { good: 40, mod: 100 } },
+                { col: 'co2', label: 'CO₂', unit: 'ppm', threshold: { good: 1000, mod: 2000 } }
+            ],
+            charts: [
+                { title: 'Particulate Matter (PM2.5 & PM10)', cols: ['pm25','pm10'], unit: 'μg/m³', colors: ['#ff9f40','#36a2eb'] },
+                { title: 'Gases (NO₂ & CO₂)', cols: ['no2','co2'], unit: 'ppb / ppm', colors: ['#4bc0c0','#9966ff'] },
+                { title: 'Temperature & Humidity', cols: ['temperature','humidity'], unit: '°C / %', colors: ['#ff6384','#ffcd56'] }
+            ]
+        },
+        'noise': {
+            kpis: [
+                { col: 'noise', label: 'Avg Noise', unit: 'dB(A)', threshold: { good: 65, mod: 80 } }
+            ],
+            charts: [
+                { title: 'Noise Level Over Time', cols: ['noise'], unit: 'dB(A)', colors: ['#ff6384'] }
+            ]
+        },
+        'weather': {
+            kpis: [
+                { col: 'temperature', label: 'Temperature', unit: '°C' },
+                { col: 'humidity', label: 'Humidity', unit: '%' },
+                { col: 'wind_speed', label: 'Wind Speed', unit: 'm/s' },
+                { col: 'rainfall', label: 'Rainfall', unit: 'mm' }
+            ],
+            charts: [
+                { title: 'Temperature & Humidity', cols: ['temperature','humidity'], unit: '°C / %', colors: ['#ff6384','#36a2eb'] },
+                { title: 'Wind & Rainfall', cols: ['wind_speed','rainfall'], unit: 'm/s / mm', colors: ['#4bc0c0','#9966ff'] }
+            ]
+        },
+        'traffic': {
+            kpis: [
+                { col: 'vehicle_count', label: 'Vehicle Count', unit: 'vehicles' },
+                { col: 'average_speed', label: 'Avg Speed', unit: 'km/h' }
+            ],
+            charts: [
+                { title: 'Traffic Volume', cols: ['vehicle_count'], unit: 'vehicles', colors: ['#4caf50'] },
+                { title: 'Average Speed', cols: ['average_speed'], unit: 'km/h', colors: ['#f44336'] }
+            ]
+        }
+    };
+
+    // ============================================
+    // RENDER DASHBOARD
+    // ============================================
+    function renderDashboard(rows) {
+        const config = datasetConfigs[state.datasetType];
+        if (!config) { renderEmpty('Unknown dataset type'); return; }
+
+        renderKPIs(rows, config);
+        renderCharts(rows, config);
+        renderTable(rows, config);
+    }
+
+    function renderKPIs(rows, config) {
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = '';
+        for (const kpi of config.kpis) {
+            const values = rows.map(r => parseFloat(r[kpi.col])).filter(v => !isNaN(v));
+            const avg = values.length ? values.reduce((a,b)=>a+b,0) / values.length : null;
+            let statusClass = 'good', statusText = 'N/A';
+            if (avg !== null) {
+                if (kpi.threshold) {
+                    if (avg <= kpi.threshold.good) { statusClass = 'good'; statusText = 'Good'; }
+                    else if (avg <= kpi.threshold.mod) { statusClass = 'moderate'; statusText = 'Moderate'; }
+                    else { statusClass = 'high'; statusText = 'High'; }
+                } else { statusText = 'Recorded'; }
+            } else { statusText = 'No data'; }
+            grid.innerHTML += `
+                <div class="stat-card">
+                    <div class="stat-header"><h3>${kpi.label}</h3><i class="fas fa-wind"></i></div>
+                    <div class="stat-value">${avg !== null ? avg.toFixed(1) : '—'}</div>
+                    <div class="stat-unit">${kpi.unit}</div>
+                    <div class="stat-status status-badge status-${statusClass}">${statusText}</div>
+                    <div class="stat-trend">Average across ${values.length} readings</div>
+                </div>`;
+        }
+    }
+
+    function renderCharts(rows, config) {
+        const container = document.getElementById('chartsContainer');
+        container.innerHTML = '';
+        // Destroy any old charts
+        Object.values(chartInstances).forEach(c => c && c.destroy && c.destroy());
+        chartInstances = {};
+
+        // Aggregate data once for all charts (using all needed columns)
+        const allCols = [...new Set(config.charts.flatMap(c => c.cols))];
+        const aggregated = aggregateData(rows, allCols, state.aggregation);
+
+        config.charts.forEach((chartCfg, idx) => {
+            const canvasId = `chart_${idx}`;
+            const analysisId = `analysis_${idx}`;
+            container.innerHTML += `
+                <div class="chart-wrapper">
+                    <h2>${chartCfg.title}</h2>
+                    <canvas id="${canvasId}"></canvas>
+                    <div class="chart-analysis" id="${analysisId}"></div>
+                </div>`;
+        });
+
+        // Build charts after DOM update
+        setTimeout(() => {
+            config.charts.forEach((chartCfg, idx) => {
+                const datasets = chartCfg.cols.map((col, i) => ({
+                    label: `${col.toUpperCase()} (${chartCfg.unit})`,
+                    data: aggregated.map(b => ({ x: b.datetime, y: b[col] })).filter(p => p.y !== null),
+                    borderColor: chartCfg.colors[i],
+                    backgroundColor: chartCfg.colors[i] + '20',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: aggregated.length > 100 ? 0 : 3,
+                    fill: false
+                }));
+
+                const ctx = document.getElementById(`chart_${idx}`);
+                chartInstances[`chart_${idx}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top' } },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: {
+                                    unit: state.aggregation === 'hour' ? 'hour' : state.aggregation === 'day' ? 'day' : state.aggregation === 'week' ? 'week' : 'month',
+                                    tooltipFormat: 'PP'
+                                },
+                                title: { display: true, text: 'Time' }
+                            },
+                            y: { title: { display: true, text: chartCfg.unit }, beginAtZero: false }
+                        }
+                    }
+                });
+
+                // Analysis text
+                const analysisEl = document.getElementById(`analysis_${idx}`);
+                analysisEl.textContent = generateAnalysis(rows, chartCfg);
+                if (!chartCfg.cols.some(c => rows.some(r => !isNaN(parseFloat(r[c]))))) {
+                    analysisEl.classList.add('empty');
+                }
+            });
+        }, 50);
+    }
+
+    function generateAnalysis(rows, chartCfg) {
+        const parts = [];
+        for (const col of chartCfg.cols) {
+            const values = rows.map(r => parseFloat(r[col])).filter(v => !isNaN(v));
+            if (values.length === 0) { parts.push(`${col.toUpperCase()}: no data available.`); continue; }
+            const avg = values.reduce((a,b)=>a+b,0) / values.length;
+            const peak = Math.max(...values);
+            const peakRow = rows.find(r => parseFloat(r[col]) === peak);
+            const peakDate = peakRow && peakRow.datetime ? new Date(peakRow.datetime).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) : 'unknown date';
+            parts.push(`${col.toUpperCase()}: averaged ${avg.toFixed(1)} ${chartCfg.unit.split(' ')[0]}, peaking at ${peak.toFixed(1)} on ${peakDate}.`);
+        }
+        return parts.join(' ');
+    }
+
+    function renderTable(rows, config) {
+        const section = document.getElementById('tableSection');
+        const head = document.getElementById('tableHead');
+        const body = document.getElementById('tableBody');
+        if (rows.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        const displayCols = ['datetime', ...config.kpis.map(k => k.col)];
+        head.innerHTML = `<tr>${displayCols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+        body.innerHTML = rows.slice(-10).reverse().map(r =>
+            `<tr>${displayCols.map(c => `<td>${c === 'datetime' ? (r[c] || '—') : (r[c] !== null && r[c] !== undefined && !isNaN(r[c]) ? parseFloat(r[c]).toFixed(1) : '—')}</td>`).join('')}</tr>`
+        ).join('');
+    }
+
+    function renderEmpty(msg) {
+        document.getElementById('statsGrid').innerHTML = '';
+        document.getElementById('chartsContainer').innerHTML = `<div class="empty-dataset">${msg}</div>`;
+        document.getElementById('tableSection').style.display = 'none';
+    }
+
+    function showLoading(msg) {
+        const el = document.getElementById('dataLoading');
+        if (msg === false) { el.classList.remove('show'); return; }
+        document.getElementById('loadingMessage').textContent = msg;
+        el.classList.add('show');
+    }
+    function showError(msg) {
+        const el = document.getElementById('dataError');
+        document.getElementById('errorMessage').textContent = msg;
+        el.classList.add('show');
+    }
+    function hideError() { document.getElementById('dataError').classList.remove('show'); }
+
+    console.log('Dashboard initialized');
+    </script>
+</body>
+</html>
