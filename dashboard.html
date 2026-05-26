@@ -87,7 +87,7 @@
                         <button class="control-pill" data-range="all">All time</button>
                         <button class="control-pill" data-range="custom">Custom</button>
                     </div>
-                    <div class="custom-dates" id="customDates">
+                    <div class="custom-dates show" id="customDates">
                         <label>From: <input type="date" id="startDate"></label>
                         <label>To: <input type="date" id="endDate"></label>
                     </div>
@@ -157,7 +157,14 @@
     setupPills('datasetPills', 'datasetType');
     setupPills('sitePills', 'site');
     setupPills('rangePills', 'range', () => {
-        document.getElementById('customDates').classList.toggle('show', state.range === 'custom');
+        // Auto-fill date pickers with the resolved range (skip for 'custom' — user controls those)
+        if (state.range !== 'custom') {
+            const { startDate, endDate } = resolveDateRange();
+            document.getElementById('startDate').value = startDate;
+            document.getElementById('endDate').value = endDate;
+            state.customStart = startDate;
+            state.customEnd = endDate;
+        }
         // Auto-pick default aggregation based on range
         const defaultAgg = { '7d':'hour', '1m':'day', '3m':'day', '6m':'week', '1y':'week', 'all':'month', 'custom':'day' };
         const def = defaultAgg[state.range];
@@ -187,10 +194,22 @@
         return Math.max(1, Math.round((new Date(state.customEnd) - new Date(state.customStart)) / 86400000));
     }
 
-    document.getElementById('startDate').addEventListener('change', e => { state.customStart = e.target.value; updateAggDisabled(); });
-    document.getElementById('endDate').addEventListener('change', e => { state.customEnd = e.target.value; updateAggDisabled(); });
+    function switchToCustomRange() {
+        state.range = 'custom';
+        document.querySelectorAll('#rangePills .control-pill').forEach(b => b.classList.toggle('active', b.dataset.range === 'custom'));
+        updateAggDisabled();
+    }
+    document.getElementById('startDate').addEventListener('change', e => { state.customStart = e.target.value; switchToCustomRange(); });
+    document.getElementById('endDate').addEventListener('change', e => { state.customEnd = e.target.value; switchToCustomRange(); });
 
-    // Initial setup
+    // Initial setup — fill in date pickers with the default 6-month range
+    (function initDates() {
+        const { startDate, endDate } = resolveDateRange();
+        document.getElementById('startDate').value = startDate;
+        document.getElementById('endDate').value = endDate;
+        state.customStart = startDate;
+        state.customEnd = endDate;
+    })();
     updateAggDisabled();
 
     // ============================================
