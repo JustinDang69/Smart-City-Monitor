@@ -309,15 +309,45 @@
             return { headers, data };
         }
 
-        async function fetchDataset(datasetType) {
-            const url = `${CLOUDFRONT_BASE_URL}/cleaned-data/${datasetType}/latest.csv`;
-            const res = await fetch(url, { cache: 'no-store' });
-            if (!res.ok) throw new Error(`${datasetType}: HTTP ${res.status}`);
-            const text = await res.text();
-            const { headers, data } = parseCSV(text);
-            const columnMap = resolveColumns(headers);
-            console.log(`[${datasetType}] columns:`, headers, 'resolved:', columnMap, 'rows:', data.length);
-            return { datasetType, headers, data, columnMap };
+        const LIST_FILES_API = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/list-files';
+
+        async function fetchDataset(datasetType, site = 'all', startDate = '2020-01-01', endDate = '2030-12-31') {
+            // Step 1: Get list of matching files from the ListCleanedFiles Lambda
+            const listUrl = `${LIST_FILES_API}?datasetType=${datasetType}&site=${site}&startDate=${startDate}&endDate=${endDate}`;
+            console.log(`[${datasetType}] listing files:`, listUrl);
+
+            const listRes = await fetch(listUrl);
+            if (!listRes.ok) throw new Error(`${datasetType}: list-files HTTP ${listRes.status}`);
+
+            const { files } = await listRes.json();
+            console.log(`[${datasetType}] found ${files.length} matching files`);
+
+            if (files.length === 0) {
+                throw new Error(`No ${datasetType} data available for the selected filters.`);
+            }
+
+            // Step 2: Fetch all matching CSVs in parallel via CloudFront
+            const csvTexts = await Promise.all(
+                files.map(f => fetch(f.url, { cache: 'no-store' }).then(r => {
+                    if (!r.ok) throw new Error(`Failed to fetch ${f.fileName}: HTTP ${r.status}`);
+                    return r.text();
+                }))
+            );
+
+            // Step 3: Parse all CSVs and combine rows
+            let combinedData = [];
+            let combinedHeaders = [];
+            for (const text of csvTexts) {
+                const { headers, data } = parseCSV(text);
+                if (combinedHeaders.length === 0) combinedHeaders = headers;
+                combinedData = combinedData.concat(data);
+            }
+
+            const columnMap = resolveColumns(combinedHeaders);
+            console.log(`[${datasetType}] combined ${combinedData.length} rows from ${files.length} files`);
+            console.log(`[${datasetType}] columns:`, combinedHeaders, 'resolved:', columnMap);
+
+            return { datasetType, headers: combinedHeaders, data: combinedData, columnMap };
         }
 
         // ============================================
@@ -693,7 +723,7 @@
                 // Fetch ONLY the selected dataset (no more 403s for missing files)
                 let ds;
                 try {
-                    ds = await fetchDataset(datasetType);
+                    ds = await fetchDataset(datasetType, site, startDate, endDate);
                 } catch (err) {
                     alert(`Could not load "${datasetType}" data.\n\n${err.message}\n\nThe file may not exist in S3 yet. Check that ${datasetType}/latest.csv has been uploaded.`);
                     return;
