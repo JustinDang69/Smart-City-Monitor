@@ -558,7 +558,9 @@
             const values = rows.map(r => parseFloat(r[col])).filter(v => !isNaN(v));
             if (values.length === 0) { parts.push(`${col.toUpperCase()}: no data available.`); continue; }
             const avg = values.reduce((a,b)=>a+b,0) / values.length;
-            const peak = Math.max(...values);
+            // Use loop instead of Math.max(...values) — spread crashes on arrays >50k
+            let peak = -Infinity;
+            for (const v of values) if (v > peak) peak = v;
             const peakRow = rows.find(r => parseFloat(r[col]) === peak);
             const peakDate = peakRow && peakRow.datetime ? new Date(peakRow.datetime).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) : 'unknown date';
             parts.push(`${col.toUpperCase()}: averaged ${avg.toFixed(1)} ${chartCfg.unit.split(' ')[0]}, peaking at ${peak.toFixed(1)} on ${peakDate}.`);
@@ -935,7 +937,9 @@
             const meta = FORECAST_META[col] || { label: col, unit: '' };
             const predValues = fc.predicted.map(p => p.value);
             const avgPred = predValues.reduce((a,b) => a+b, 0) / predValues.length;
-            const peakPred = Math.max(...predValues);
+            // Use loop instead of Math.max(...) for safety with large arrays
+            let peakPred = -Infinity;
+            for (const v of predValues) if (v > peakPred) peakPred = v;
             const peakDay  = fc.predicted.find(p => p.value === peakPred);
             const histAvg  = fc.historical.reduce((a,h) => a + h.value, 0) / fc.historical.length;
             const change = ((avgPred - histAvg) / histAvg) * 100;
