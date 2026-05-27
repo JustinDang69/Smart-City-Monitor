@@ -192,33 +192,7 @@ function handleLogout() {
     window.location.href = 'index.html';
 }
 
-// ============================================
-// DASHBOARD-SPECIFIC FUNCTIONALITY
-// ============================================
 
-// Apply filters on dashboard
-const applyFiltersBtn = document.getElementById('applyFilters');
-if (applyFiltersBtn) {
-    applyFiltersBtn.addEventListener('click', function() {
-        const site = document.getElementById('siteSelector').value;
-        const startDate = document.getElementById('startDate').value;
-        const endDate = document.getElementById('endDate').value;
-
-        if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
-            return;
-        }
-
-        // In real system, this would:
-        // 1. Send filter request to: GET /api/measurements?site={site}&startDate={startDate}&endDate={endDate}
-        // 2. Receive filtered data from backend
-        // 3. Update charts and tables with new data
-        // 4. Show loading indicator while fetching
-        
-        console.log('Filters applied:', { site, startDate, endDate });
-        alert('Filters applied! In live system, this would fetch data from backend API.');
-    });
-}
 
 // Populate dashboard data on page load
 if (window.location.pathname.includes('dashboard.html')) {
