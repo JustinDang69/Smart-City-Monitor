@@ -279,14 +279,28 @@
     function parseCSV(text) {
         const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l => l.trim());
         if (lines.length < 2) return [];
-        const headers = lines[0].split(',').map(h => h.trim());
+        let headers = lines[0].split(',').map(h => h.trim());
+        
+        // Normalize headers: map common variations to canonical names
+        headers = headers.map(h => {
+            const lower = h.toLowerCase();
+            if (lower === 'date' || lower === 'date (australia/sydney)' || lower === 'date_australia_sydney') return 'datetime';
+            if (lower === 'pm2_5' || lower === 'pm2.5') return 'pm25';
+            if (lower === 'sound') return 'noise';
+            return lower;
+        });
+        
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',');
             if (values.length !== headers.length) continue;
             const row = {};
             headers.forEach((h, idx) => {
-                const v = (values[idx] || '').trim();
+                let v = (values[idx] || '').trim();
+                // Strip timezone offsets from datetime values
+                if (h === 'datetime' && v) {
+                    v = v.replace(/[+-]\d{2}:\d{2}$/, '').trim();
+                }
                 row[h] = v === '' ? null : (isNaN(v) ? v : parseFloat(v));
             });
             rows.push(row);
