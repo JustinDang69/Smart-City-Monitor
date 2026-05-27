@@ -632,34 +632,183 @@
         // ============================================
         // CSV EXPORT (real, client-side)
         // ============================================
-        let lastReportSnapshot = null;  // { datasets: { air: {...}, noise: {...}, ... }, filters: {...} }
+        let lastReportSnapshot = null;  // { filters, rowCount, analytics, summaryStats }
+
+        // Compute summary stats (avg, peak, status) for the metrics relevant to the dataset
+        function computeSummaryStats(ds, datasetType) {
+            const stats = [];
+            if (!ds || !ds.rows || ds.rows.length === 0) return stats;
+
+            const statusFor = (avg, good, mod) => {
+                if (!isFinite(avg)) return 'N/A';
+                if (avg <= good) return 'Good';
+                if (avg <= mod) return 'Moderate';
+                return 'High';
+            };
+
+            if (datasetType === 'air-quality') {
+                const metrics = [
+                    { col: ds.columnMap.pm25, label: 'PM2.5', unit: 'μg/m³', good: 25, mod: 75 },
+                    { col: ds.columnMap.pm10, label: 'PM10',  unit: 'μg/m³', good: 50, mod: 150 },
+                    { col: ds.columnMap.no2,  label: 'NO₂',   unit: 'ppb',   good: 40, mod: 100 },
+                    { col: ds.columnMap.co2,  label: 'CO₂',   unit: 'ppm',   good: 1000, mod: 2000 }
+                ];
+                for (const m of metrics) {
+                    if (!m.col) continue;
+                    const vals = ds.rows.map(r => toNum(r[m.col])).filter(isFinite);
+                    if (!vals.length) continue;
+                    const avg = mean(vals), peak = max(vals);
+                    stats.push({ metric: m.label, average: `${avg.toFixed(1)} ${m.unit}`, peak: `${peak.toFixed(1)} ${m.unit}`, status: statusFor(avg, m.good, m.mod) });
+                }
+            } else if (datasetType === 'noise') {
+                if (ds.columnMap.noise) {
+                    const vals = ds.rows.map(r => toNum(r[ds.columnMap.noise])).filter(isFinite);
+                    if (vals.length) {
+                        const avg = mean(vals), peak = max(vals);
+                        stats.push({ metric: 'Noise', average: `${avg.toFixed(1)} dB(A)`, peak: `${peak.toFixed(1)} dB(A)`, status: statusFor(avg, 65, 80) });
+                    }
+                }
+            } else if (datasetType === 'weather') {
+                const metrics = [
+                    { col: ds.columnMap.temperature, label: 'Temperature', unit: '°C' },
+                    { col: ds.columnMap.humidity,    label: 'Humidity',    unit: '%' },
+                    { col: ds.columnMap.windspeed,   label: 'Wind Speed',  unit: 'm/s' },
+                    { col: ds.columnMap.rainfall,    label: 'Rainfall',    unit: 'mm' }
+                ];
+                for (const m of metrics) {
+                    if (!m.col) continue;
+                    const vals = ds.rows.map(r => toNum(r[m.col])).filter(isFinite);
+                    if (!vals.length) continue;
+                    const avg = mean(vals), peak = max(vals);
+                    stats.push({ metric: m.label, average: `${avg.toFixed(1)} ${m.unit}`, peak: `${peak.toFixed(1)} ${m.unit}`, status: 'Recorded' });
+                }
+            } else if (datasetType === 'traffic') {
+                const metrics = [
+                    { col: ds.columnMap.vehiclecount, label: 'Vehicle Count', unit: 'vehicles' },
+                    { col: ds.columnMap.averagespeed, label: 'Avg Speed',     unit: 'km/h' }
+                ];
+                for (const m of metrics) {
+                    if (!m.col) continue;
+                    const vals = ds.rows.map(r => toNum(r[m.col])).filter(isFinite);
+                    if (!vals.length) continue;
+                    const avg = mean(vals), peak = max(vals);
+                    stats.push({ metric: m.label, average: `${avg.toFixed(1)} ${m.unit}`, peak: `${peak.toFixed(1)} ${m.unit}`, status: 'Recorded' });
+                }
+            }
+            return stats;
+        }
+
+        // CSV-safe escape (handles commas, quotes, newlines)
+        function csvEscape(v) {
+            if (v === undefined || v === null) return '';
+            const s = String(v);
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        }
 
         function exportCSV() {
             if (!lastReportSnapshot) { alert('Generate a report first.'); return; }
-            const { datasets, filters } = lastReportSnapshot;
-            const parts = [];
-            parts.push(`# Smart City Monitor — Report Export`);
-            parts.push(`# Generated: ${new Date().toISOString()}`);
-            parts.push(`# Site: ${filters.site}   Range: ${filters.startDate} → ${filters.endDate}`);
-            for (const [name, ds] of Object.entries(datasets)) {
-                if (!ds || !ds.rows.length) continue;
-                parts.push('');
-                parts.push(`# === ${name} (${ds.rows.length} rows) ===`);
-                parts.push(ds.headers.join(','));
-                for (const r of ds.rows) {
-                    parts.push(ds.headers.map(h => {
-                        const v = r[h];
-                        if (v === undefined || v === null) return '';
-                        const s = String(v);
-                        return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
-                    }).join(','));
+            const { filters, rowCount, analytics, summaryStats } = lastReportSnapshot;
+            const lines = [];
+
+            // --- HEADER ---
+            const datasetLabel = filters.datasetType.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase());
+            lines.push(`# Smart City Monitor — ${datasetLabel} Report`);
+            lines.push(`# Generated: ${new Date().toISOString()}`);
+            lines.push(`# Site: ${filters.site}`);
+            lines.push(`# Date Range: ${filters.startDate} to ${filters.endDate}`);
+            lines.push(`# Rows Analyzed: ${rowCount}`);
+            lines.push('');
+
+            // --- SUMMARY STATISTICS ---
+            lines.push('# === SUMMARY STATISTICS ===');
+            if (summaryStats.length === 0) {
+                lines.push('(no metrics available)');
+            } else {
+                lines.push(['Metric', 'Average', 'Peak', 'Status'].map(csvEscape).join(','));
+                for (const s of summaryStats) {
+                    lines.push([s.metric, s.average, s.peak, s.status].map(csvEscape).join(','));
                 }
             }
-            const blob = new Blob([parts.join('\n')], { type: 'text/csv;charset=utf-8' });
+            lines.push('');
+
+            // --- HIGH-RISK DAYS ---
+            if (['air-quality', 'noise'].includes(filters.datasetType)) {
+                lines.push('# === HIGH-RISK DAYS ===');
+                if (analytics.highRiskDays.length === 0) {
+                    lines.push('(no high-risk days detected)');
+                } else {
+                    lines.push(['Date', 'Reason', 'Value'].map(csvEscape).join(','));
+                    for (const d of analytics.highRiskDays) {
+                        lines.push([d.date, d.reason, d.value].map(csvEscape).join(','));
+                    }
+                }
+                lines.push('');
+            }
+
+            // --- PEAK POLLUTION PERIODS ---
+            if (filters.datasetType === 'air-quality') {
+                lines.push('# === PEAK POLLUTION PERIODS (TOP 5 HOURS) ===');
+                if (analytics.pollutionPeriods.length === 0) {
+                    lines.push('(no air-quality data)');
+                } else {
+                    lines.push(['Period', 'Avg PM2.5', 'Avg NO2', 'Status'].map(csvEscape).join(','));
+                    for (const p of analytics.pollutionPeriods) {
+                        lines.push([
+                            fmtHourRange(p.hour),
+                            isFinite(p.pm25) ? p.pm25.toFixed(1) : 'N/A',
+                            isFinite(p.no2)  ? p.no2.toFixed(1)  : 'N/A',
+                            p.status
+                        ].map(csvEscape).join(','));
+                    }
+                }
+                lines.push('');
+            }
+
+            // --- PEAK NOISE PERIODS ---
+            if (filters.datasetType === 'noise') {
+                lines.push('# === PEAK NOISE PERIODS (TOP 5 HOURS) ===');
+                if (analytics.noisePeriods.length === 0) {
+                    lines.push('(no noise data)');
+                } else {
+                    lines.push(['Period', 'Avg Noise dB(A)', 'Peak dB(A)', 'Risk'].map(csvEscape).join(','));
+                    for (const p of analytics.noisePeriods) {
+                        lines.push([
+                            fmtHourRange(p.hour),
+                            p.avg.toFixed(1),
+                            p.peak.toFixed(1),
+                            p.risk
+                        ].map(csvEscape).join(','));
+                    }
+                }
+                lines.push('');
+            }
+
+            // --- WEATHER CONTEXT ---
+            if (filters.datasetType === 'weather' && analytics.weather) {
+                lines.push('# === WEATHER CONTEXT ===');
+                lines.push(['Parameter', 'Value'].map(csvEscape).join(','));
+                lines.push(['Average Temperature', analytics.weather.avgTemp].map(csvEscape).join(','));
+                lines.push(['Average Humidity',    analytics.weather.avgHumidity].map(csvEscape).join(','));
+                lines.push(['Average Wind Speed',  analytics.weather.avgWindSpeed].map(csvEscape).join(','));
+                lines.push(['Dominant Wind Direction', analytics.weather.windDir].map(csvEscape).join(','));
+                lines.push(['Total Rainfall',      analytics.weather.rainfall].map(csvEscape).join(','));
+                lines.push('');
+            }
+
+            // --- TRAFFIC CONTEXT ---
+            if (filters.datasetType === 'traffic' && analytics.traffic) {
+                lines.push('# === TRAFFIC CONTEXT ===');
+                lines.push(['Parameter', 'Value'].map(csvEscape).join(','));
+                lines.push(['Average Traffic Density', analytics.traffic.density].map(csvEscape).join(','));
+                lines.push(['Peak Traffic Hours',      analytics.traffic.peakHours].map(csvEscape).join(','));
+                lines.push('');
+            }
+
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `report_${filters.datasetType || 'data'}_${filters.site}_${filters.startDate}_${filters.endDate}.csv`;
+            a.download = `report_${filters.datasetType}_${filters.site}_${filters.startDate}_${filters.endDate}.csv`;
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
@@ -762,23 +911,36 @@
                 // Show/hide cards based on what we actually have
                 showCardsForDataset(datasetType);
 
-                // Compute and render relevant sections
+                // Compute analytics once — use for both rendering and CSV export
+                let analytics = { highRiskDays: [], pollutionPeriods: [], noisePeriods: [], weather: null, traffic: null };
+
                 if (datasetType === 'air-quality') {
-                    renderHighRiskDays(findHighRiskDays(air.rows, air.columnMap, [], {}));
-                    renderPollutionTable(peakPollutionPeriods(air.rows, air.columnMap, 5));
+                    analytics.highRiskDays     = findHighRiskDays(air.rows, air.columnMap, [], {});
+                    analytics.pollutionPeriods = peakPollutionPeriods(air.rows, air.columnMap, 5);
+                    renderHighRiskDays(analytics.highRiskDays);
+                    renderPollutionTable(analytics.pollutionPeriods);
                 } else if (datasetType === 'noise') {
-                    renderHighRiskDays(findHighRiskDays([], {}, noise.rows, noise.columnMap));
-                    renderNoiseTable(peakNoisePeriods(noise.rows, noise.columnMap, 5));
+                    analytics.highRiskDays = findHighRiskDays([], {}, noise.rows, noise.columnMap);
+                    analytics.noisePeriods = peakNoisePeriods(noise.rows, noise.columnMap, 5);
+                    renderHighRiskDays(analytics.highRiskDays);
+                    renderNoiseTable(analytics.noisePeriods);
                 } else if (datasetType === 'weather') {
-                    renderContext(weatherContext(weather.rows, weather.columnMap), { density: 'N/A', peakHours: 'N/A' });
+                    analytics.weather = weatherContext(weather.rows, weather.columnMap);
+                    renderContext(analytics.weather, { density: 'N/A', peakHours: 'N/A' });
                 } else if (datasetType === 'traffic') {
-                    renderContext({ avgTemp: 'N/A', windDir: 'N/A', rainfall: 'N/A' }, trafficContext(traffic.rows, traffic.columnMap));
+                    analytics.traffic = trafficContext(traffic.rows, traffic.columnMap);
+                    renderContext({ avgTemp: 'N/A', windDir: 'N/A', rainfall: 'N/A' }, analytics.traffic);
                 }
 
-                // Stash for CSV export
+                // Compute summary statistics for the selected dataset
+                const summaryStats = computeSummaryStats(filtered, datasetType);
+
+                // Stash for CSV export — analytics, not raw rows
                 lastReportSnapshot = {
                     filters: { datasetType, site, startDate, endDate },
-                    datasets: { [datasetType]: filtered }
+                    rowCount: filtered.rows.length,
+                    analytics,
+                    summaryStats
                 };
 
                 document.getElementById('reportSummary').style.display = 'block';
