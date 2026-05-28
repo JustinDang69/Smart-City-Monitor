@@ -44,6 +44,27 @@
         .forecast-summary-card .metric strong { color:#000; }
         .forecast-chart-wrapper { background:#fafbfc; border-radius:6px; padding:16px; margin-top:20px; }
         .forecast-chart-wrapper h3 { color:#333; margin-bottom:12px; font-size:16px; }
+        /* === Cause Analysis section (Stage C) === */
+        .cause-section { background:#fff; border-radius:8px; padding:24px; margin-top:30px; box-shadow:0 1px 3px rgba(0,0,0,0.08); display:none; }
+        .cause-section.show { display:block; }
+        .cause-section h2 { color:#6a1b9a; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+        .cause-section h2 i { color:#6a1b9a; }
+        .cause-intro { color:#666; font-size:14px; margin-bottom:18px; line-height:1.5; }
+        .cause-loading, .cause-error { padding:14px 16px; border-radius:6px; margin-bottom:16px; font-size:14px; }
+        .cause-loading { background:#f3e5f5; color:#6a1b9a; }
+        .cause-error  { background:#ffebee; color:#c62828; border-left:4px solid #d32f2f; }
+        .cause-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+        @media (max-width: 900px) { .cause-grid { grid-template-columns:1fr; } }
+        .cause-panel { background:#fafbfc; border-radius:6px; padding:16px; }
+        .cause-panel h3 { color:#333; margin-bottom:10px; font-size:15px; }
+        .cause-explanation { background:#f3e5f5; border-left:4px solid #6a1b9a; padding:14px 16px; border-radius:6px; line-height:1.7; color:#333; margin-bottom:14px; }
+        .cause-explanation strong { color:#4a148c; }
+        .cause-suggestions { background:#fff8e1; border-left:4px solid #f57c00; padding:14px 16px; border-radius:6px; }
+        .cause-suggestions h3 { color:#e65100; margin-bottom:8px; font-size:15px; }
+        .cause-suggestions ol { margin-left:20px; line-height:1.7; }
+        .cause-suggestions li { margin-bottom:4px; }
+        .cause-meta { color:#999; font-size:11px; text-align:right; margin-top:10px; }
+        .cause-retry-btn { margin-top:8px; background:#d32f2f; color:#fff; border:0; padding:6px 14px; border-radius:4px; cursor:pointer; font-size:13px; }
     </style>
 </head>
 <body>
@@ -134,6 +155,46 @@
                 <div class="table-wrapper"><table class="data-table"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
             </div>
 
+            <!-- Cause Analysis Section (Stage C) — only shown for air-quality and noise -->
+            <div class="cause-section" id="causeSection">
+                <h2><i class="fas fa-brain"></i> AI Cause Analysis</h2>
+                <p class="cause-intro">
+                    What's driving the observed pollution patterns? This combines Pearson correlation against traffic and weather drivers
+                    with an LLM-written explanation and policy suggestions.
+                </p>
+                <div id="causeLoading" class="cause-loading" style="display:none;">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Computing correlations and asking the model for an explanation…
+                </div>
+                <div id="causeError" class="cause-error" style="display:none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <span id="causeErrorText"></span>
+                    <br>
+                    <button class="cause-retry-btn" id="causeRetryBtn">Retry</button>
+                </div>
+                <div id="causeContent" style="display:none;">
+                    <div class="cause-grid">
+                        <div class="cause-panel">
+                            <h3>Correlation Strength (top drivers)</h3>
+                            <canvas id="correlationBarChart"></canvas>
+                        </div>
+                        <div class="cause-panel">
+                            <h3 id="scatterTitle">Strongest Relationship</h3>
+                            <canvas id="causeScatterChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="cause-explanation">
+                        <strong>Why this happened:</strong>
+                        <p id="causeExplanation" style="margin-top:6px;"></p>
+                    </div>
+                    <div class="cause-suggestions">
+                        <h3><i class="fas fa-lightbulb"></i> Suggested Actions</h3>
+                        <ol id="causeSuggestions"></ol>
+                    </div>
+                    <div class="cause-meta" id="causeMeta"></div>
+                </div>
+            </div>
+
             <!-- Forecast Section -->
             <div class="forecast-section" id="forecastSection" style="display:none;">
                 <h2><i class="fas fa-magic"></i> Forecast</h2>
@@ -164,6 +225,7 @@
     // DASHBOARD — Two-step fetch, time-scale charts, auto-aggregation, analysis text
     // ============================================
     const LIST_FILES_API = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/list-files';
+    const ANALYZE_API    = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/analyze';
 
     // State
     let state = {
@@ -316,7 +378,7 @@
         const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l => l.trim());
         if (lines.length < 2) return [];
         let headers = lines[0].split(',').map(h => h.trim());
-        
+
         // Normalize headers: map common variations to canonical names
         headers = headers.map(h => {
             const lower = h.toLowerCase();
@@ -325,7 +387,7 @@
             if (lower === 'sound') return 'noise';
             return lower;
         });
-        
+
         const rows = [];
         for (let i = 1; i < lines.length; i++) {
             const values = lines[i].split(',');
@@ -456,6 +518,7 @@
         renderCharts(rows, config);
         renderTable(rows, config);
         renderForecast(rows);
+        renderCauseAnalysis();  // Stage C — only acts for air-quality / noise; hides otherwise
     }
 
     function renderKPIs(rows, config) {
@@ -586,6 +649,7 @@
         document.getElementById('chartsContainer').innerHTML = `<div class="empty-dataset">${msg}</div>`;
         document.getElementById('tableSection').style.display = 'none';
         document.getElementById('forecastSection').style.display = 'none';
+        document.getElementById('causeSection').classList.remove('show');
     }
 
     function showLoading(msg) {
@@ -600,6 +664,190 @@
         el.classList.add('show');
     }
     function hideError() { document.getElementById('dataError').classList.remove('show'); }
+
+    // ============================================================
+    // STAGE C — AI CAUSE ANALYSIS
+    // Calls /analyze for outcome datasets (air-quality, noise) and renders
+    // a correlation bar chart, scatter plot, explanation, and policy suggestions.
+    // Drivers (traffic, weather) are inputs only — section is hidden for them.
+    // ============================================================
+    const OUTCOME_DATASETS = new Set(['air-quality', 'noise']);
+    const DRIVER_LABELS = {
+        vehicle_count: 'Vehicle count',
+        average_speed: 'Avg vehicle speed (km/h)',
+        temperature:   'Temperature (°C)',
+        humidity:      'Humidity (%)',
+        wind_speed:    'Wind speed (m/s)',
+        rainfall:      'Rainfall (mm)',
+    };
+    const OUTCOME_LABELS = {
+        pm25:  'PM2.5 (μg/m³)',
+        no2:   'NO₂ (ppb)',
+        co2:   'CO₂ (ppm)',
+        noise: 'Noise level (dB(A))',
+    };
+    let causeChartInstances = { bar: null, scatter: null };
+    let lastCauseArgs = null;
+
+    // Called from renderDashboard after the main dashboard finishes.
+    function renderCauseAnalysis() {
+        const section = document.getElementById('causeSection');
+
+        // Only for outcome datasets.
+        if (!OUTCOME_DATASETS.has(state.datasetType)) {
+            section.classList.remove('show');
+            return;
+        }
+        section.classList.add('show');
+
+        // "All sites" can't be analysed — the Lambda needs a specific site to join
+        // air-quality + traffic + weather files together.
+        if (state.site === 'all') {
+            document.getElementById('causeLoading').style.display = 'none';
+            document.getElementById('causeContent').style.display = 'none';
+            document.getElementById('causeErrorText').textContent =
+                'Select a single monitoring site to see cause analysis (all-sites view aggregates data and cannot be correlated against traffic/weather).';
+            document.getElementById('causeError').style.display = 'block';
+            return;
+        }
+
+        const { startDate, endDate } = resolveDateRange();
+        lastCauseArgs = { datasetType: state.datasetType, site: state.site, startDate, endDate };
+        fetchCauseAnalysis(state.datasetType, state.site, startDate, endDate);
+    }
+
+    async function fetchCauseAnalysis(datasetType, site, startDate, endDate) {
+        document.getElementById('causeLoading').style.display = 'block';
+        document.getElementById('causeError').style.display = 'none';
+        document.getElementById('causeContent').style.display = 'none';
+
+        const params = new URLSearchParams({ datasetType, site });
+        if (startDate) params.append('startDate', startDate);
+        if (endDate)   params.append('endDate', endDate);
+        const url = `${ANALYZE_API}?${params.toString()}`;
+
+        try {
+            console.log('[cause] fetching', url);
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                const body = await resp.text();
+                throw new Error(`HTTP ${resp.status}: ${body.slice(0, 200)}`);
+            }
+            const data = await resp.json();
+            console.log('[cause] response', data);
+            renderCauseResult(data);
+        } catch (err) {
+            console.error('[cause] error', err);
+            document.getElementById('causeLoading').style.display = 'none';
+            document.getElementById('causeErrorText').textContent =
+                'Could not load cause analysis: ' + err.message;
+            document.getElementById('causeError').style.display = 'block';
+        }
+    }
+
+    function renderCauseResult(data) {
+        document.getElementById('causeLoading').style.display = 'none';
+        document.getElementById('causeError').style.display = 'none';
+        document.getElementById('causeContent').style.display = 'block';
+
+        renderCorrelationBar(data.correlations || []);
+        renderScatterForStrongest(data);
+        renderExplanationAndSuggestions(data);
+    }
+
+    function renderCorrelationBar(correlations) {
+        const top = [...correlations]
+            .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+            .slice(0, 6);
+
+        const labels = top.map(c => {
+            const out = (OUTCOME_LABELS[c.outcome] || c.outcome).split(' ')[0];
+            const drv = DRIVER_LABELS[c.driver] || c.driver;
+            return `${out} vs ${drv}`;
+        });
+        const values = top.map(c => c.r);
+        // Green = positive r, red = negative r — makes direction obvious at a glance.
+        const colors = values.map(v => v >= 0 ? 'rgba(76, 175, 80, 0.75)' : 'rgba(244, 67, 54, 0.75)');
+
+        if (causeChartInstances.bar) causeChartInstances.bar.destroy();
+        const ctx = document.getElementById('correlationBarChart');
+        causeChartInstances.bar = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{ label: 'Pearson r', data: values, backgroundColor: colors, borderWidth: 0 }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `r = ${ctx.parsed.x.toFixed(3)}` } }
+                },
+                scales: {
+                    x: { min: -1, max: 1, title: { display: true, text: 'Correlation (r)' } }
+                }
+            }
+        });
+    }
+
+    function renderScatterForStrongest(data) {
+        const correlations = data.correlations || [];
+        if (correlations.length === 0) return;
+        const strongest = [...correlations].sort((a, b) => Math.abs(b.r) - Math.abs(a.r))[0];
+
+        const outcomeBlock = (data.scatter || {})[strongest.outcome] || {};
+        const points = outcomeBlock[strongest.driver] || [];
+
+        document.getElementById('scatterTitle').textContent =
+            `${OUTCOME_LABELS[strongest.outcome] || strongest.outcome} vs ` +
+            `${DRIVER_LABELS[strongest.driver] || strongest.driver}  ` +
+            `(r=${strongest.r.toFixed(3)})`;
+
+        if (causeChartInstances.scatter) causeChartInstances.scatter.destroy();
+        const ctx = document.getElementById('causeScatterChart');
+        causeChartInstances.scatter = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Observations',
+                    data: points,
+                    backgroundColor: 'rgba(106, 27, 154, 0.45)',
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { title: { display: true, text: DRIVER_LABELS[strongest.driver] || strongest.driver } },
+                    y: { title: { display: true, text: OUTCOME_LABELS[strongest.outcome] || strongest.outcome } }
+                }
+            }
+        });
+    }
+
+    function renderExplanationAndSuggestions(data) {
+        document.getElementById('causeExplanation').textContent =
+            data.explanation || '(no explanation returned)';
+
+        const ol = document.getElementById('causeSuggestions');
+        ol.innerHTML = '';
+        (data.suggestions || []).forEach(s => {
+            const li = document.createElement('li');
+            li.textContent = s;
+            ol.appendChild(li);
+        });
+
+        document.getElementById('causeMeta').textContent =
+            `Source: ${data.insightSource || 'unknown'} · ${(data.correlations || []).length} correlations computed`;
+    }
+
+    document.getElementById('causeRetryBtn').addEventListener('click', () => {
+        if (!lastCauseArgs) return;
+        const { datasetType, site, startDate, endDate } = lastCauseArgs;
+        fetchCauseAnalysis(datasetType, site, startDate, endDate);
+    });
 
     // ============================================================
     // FORECASTING ENGINE
