@@ -376,13 +376,20 @@
         // ============================================
         // ANALYTICS
         // ============================================
+        // NOTE: max() uses an explicit loop because Math.max(...v) blows the call
+        // stack when v has more than ~100k items — which happens with the 122k-row
+        // cleaned CSVs. Same issue/fix pattern as dashboard.html.
         const mean = (xs) => {
-            const v = xs.filter(x => isFinite(x));
-            return v.length ? v.reduce((a,b)=>a+b,0)/v.length : NaN;
+            let sum = 0, n = 0;
+            for (const x of xs) { if (isFinite(x)) { sum += x; n++; } }
+            return n ? sum / n : NaN;
         };
         const max = (xs) => {
-            const v = xs.filter(x => isFinite(x));
-            return v.length ? Math.max(...v) : NaN;
+            let best = -Infinity, seen = false;
+            for (const x of xs) {
+                if (isFinite(x)) { if (x > best) best = x; seen = true; }
+            }
+            return seen ? best : NaN;
         };
 
         // Group rows by YYYY-MM-DD
@@ -537,17 +544,26 @@
                 const degs = rows.map(r => toNum(r[columnMap.winddir])).filter(isFinite);
                 if (degs.length) {
                     // Circular mean (avg sin/cos components, then atan2)
-                    const rad = degs.map(d => d * Math.PI / 180);
-                    const sinSum = rad.reduce((a,r)=>a+Math.sin(r),0)/rad.length;
-                    const cosSum = rad.reduce((a,r)=>a+Math.cos(r),0)/rad.length;
+                    let sinSum = 0, cosSum = 0;
+                    for (const d of degs) {
+                        const r = d * Math.PI / 180;
+                        sinSum += Math.sin(r);
+                        cosSum += Math.cos(r);
+                    }
+                    sinSum /= degs.length;
+                    cosSum /= degs.length;
                     let avgDeg = Math.atan2(sinSum, cosSum) * 180 / Math.PI;
                     if (avgDeg < 0) avgDeg += 360;
                     ctx.windDir = `${compassFromDeg(avgDeg)} (${avgDeg.toFixed(0)}°)`;
                 }
             }
             if (columnMap.rainfall) {
-                const vals = rows.map(r => toNum(r[columnMap.rainfall])).filter(isFinite);
-                if (vals.length) ctx.rainfall = `${vals.reduce((a,b)=>a+b,0).toFixed(1)} mm`;
+                let total = 0, any = false;
+                for (const r of rows) {
+                    const v = toNum(r[columnMap.rainfall]);
+                    if (isFinite(v)) { total += v; any = true; }
+                }
+                if (any) ctx.rainfall = `${total.toFixed(1)} mm`;
             }
             return ctx;
         }
@@ -840,14 +856,21 @@
                 console.warn(`[${ds.datasetType}] no datetime column or empty CSV — cannot compute span.`);
                 return null;
             }
-            const dates = ds.data.map(r => parseDateValue(r[ds.columnMap.datetime])).filter(Boolean);
+            const dates = [];
+            for (const r of ds.data) {
+                const d = parseDateValue(r[ds.columnMap.datetime]);
+                if (d) dates.push(d.getTime());
+            }
             if (!dates.length) {
                 console.warn(`[${ds.datasetType}] datetime column "${ds.columnMap.datetime}" produced no parseable dates. Sample:`,
                              ds.data[0][ds.columnMap.datetime]);
                 return null;
             }
-            const min = new Date(Math.min(...dates));
-            const max = new Date(Math.max(...dates));
+            // Loops instead of Math.min/max spread — same call-stack concern as elsewhere.
+            let lo = Infinity, hi = -Infinity;
+            for (const t of dates) { if (t < lo) lo = t; if (t > hi) hi = t; }
+            const min = new Date(lo);
+            const max = new Date(hi);
             console.log(`[${ds.datasetType}] data spans ${min.toISOString().slice(0,10)} → ${max.toISOString().slice(0,10)} (${dates.length} dated rows)`);
             return { min, max };
         }
