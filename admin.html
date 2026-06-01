@@ -6,6 +6,8 @@
     <title>Admin Upload - Smart Air and Noise Quality Monitoring System</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- AWS Cognito Identity SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.12/dist/amazon-cognito-identity.min.js"></script>
     <style>
         .status-message {
             padding: 15px;
@@ -55,6 +57,33 @@
             font-size: 12px;
             font-weight: bold;
         }
+        /* Locked state for the upload section when not logged in */
+        #authGate {
+            background-color: #fff3e0;
+            border-left: 4px solid #f57c00;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        #authGate h2 {
+            color: #e65100;
+            margin-bottom: 15px;
+        }
+        #authGate p {
+            color: #424242;
+            margin-bottom: 20px;
+        }
+        #userBadge {
+            display: inline-block;
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-left: 12px;
+        }
     </style>
 </head>
 <body>
@@ -71,8 +100,8 @@
                 <li><a href="reports.html" class="nav-link">Reports</a></li>
                 <li><a href="admin.html" class="nav-link active">Admin Upload</a></li>
                 <li><a href="about.html" class="nav-link">About</a></li>
-                <li id="loginBtn"><a href="#" class="nav-link btn-login">Login</a></li>
-                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login">Logout</a></li>
+                <li id="loginBtn"><a href="#" class="nav-link btn-login" onclick="openLoginModal(event)">Login</a></li>
+                <li id="logoutBtn" style="display:none;"><a href="#" class="nav-link btn-login" onclick="logout(event)">Logout</a></li>
             </ul>
             <div class="hamburger">
                 <span></span>
@@ -85,21 +114,21 @@
     <!-- Login Modal -->
     <div id="loginModal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <span class="close" onclick="closeLoginModal()">&times;</span>
             <div class="login-form-container">
                 <h2>Admin Login</h2>
-                <p class="demo-note">Demo Account: admin@braybrook.gov.au / admin123</p>
-                <form id="loginForm">
+                <p class="demo-note">Authentication powered by AWS Cognito</p>
+                <form id="loginForm" onsubmit="handleLogin(event)">
                     <div class="form-group">
                         <label for="email">Email:</label>
-                        <input type="email" id="email" name="email" required>
+                        <input type="email" id="email" name="email" required autocomplete="username">
                     </div>
                     <div class="form-group">
                         <label for="password">Password:</label>
-                        <input type="password" id="password" name="password" required>
+                        <input type="password" id="password" name="password" required autocomplete="current-password">
                     </div>
                     <div id="loginError" class="error-message" style="display:none;"></div>
-                    <button type="submit" class="btn-primary">Login</button>
+                    <button type="submit" class="btn-primary" id="loginSubmitBtn">Login</button>
                 </form>
             </div>
         </div>
@@ -108,129 +137,139 @@
     <!-- Main Content -->
     <main class="main-content">
         <div class="container">
-            <h1>Admin Data Upload - Braybrook</h1>
+            <h1>Admin Data Upload - Braybrook <span id="userBadge" style="display:none;"></span></h1>
+
+            <!-- Auth Gate (shown when not logged in) -->
+            <div id="authGate" style="display:none;">
+                <h2><i class="fas fa-lock"></i> Authentication required</h2>
+                <p>You must be signed in as an authorised administrator to upload environmental data.</p>
+                <button class="btn-primary" onclick="openLoginModal(event)">Sign in to continue</button>
+            </div>
 
             <!-- Status Message Section -->
             <div id="statusMessage" class="status-message"></div>
 
-            <!-- Upload Form Section -->
-            <div class="admin-section">
-                <h2>Upload Environmental Data</h2>
-                <div class="upload-card">
-                    <div class="upload-form">
-                        <div class="form-group">
-                            <label for="datasetType">Dataset Type:</label>
-                            <select id="datasetType">
-                                <option value="">Select Dataset Type</option>
-                                <option value="air-quality">Air Quality Measurements</option>
-                                <option value="noise">Noise Monitoring Data</option>
-                                <option value="weather">Weather Data</option>
-                                <option value="traffic">Traffic Analysis Data</option>
-                            </select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="fileInput">Upload File (CSV or JSON):</label>
-                            <div class="file-input-wrapper">
-                                <input type="file" id="fileInput" accept=".csv,.json">
-                                <label for="fileInput" class="file-label">
-                                    <i class="fas fa-cloud-upload-alt"></i>
-                                    <span>Click to select file or drag and drop</span>
-                                </label>
+            <!-- Upload Form Section (hidden until logged in) -->
+            <div id="adminContent" style="display:none;">
+                <div class="admin-section">
+                    <h2>Upload Environmental Data</h2>
+                    <div class="upload-card">
+                        <div class="upload-form">
+                            <div class="form-group">
+                                <label for="datasetType">Dataset Type:</label>
+                                <select id="datasetType">
+                                    <option value="">Select Dataset Type</option>
+                                    <option value="air-quality">Air Quality Measurements</option>
+                                    <option value="noise">Noise Monitoring Data</option>
+                                    <option value="weather">Weather Data</option>
+                                    <option value="traffic">Traffic Analysis Data</option>
+                                </select>
                             </div>
-                            <p class="file-hint">Supported formats: CSV, JSON | Max size: 50MB</p>
-                        </div>
 
-                        <div class="form-group">
-                            <label for="siteSelect">Monitoring Site:</label>
-                            <select id="siteSelect">
-                                <option value="">Select Site</option>
-                                <option value="north">North Braybrook</option>
-                                <option value="central">Central Braybrook</option>
-                                <option value="south">South Braybrook</option>
-                                <option value="east">East Braybrook</option>
-                                <option value="west">West Braybrook</option>
-                            </select>
-                        </div>
+                            <div class="form-group">
+                                <label for="fileInput">Upload File (CSV or JSON):</label>
+                                <div class="file-input-wrapper">
+                                    <input type="file" id="fileInput" accept=".csv,.json">
+                                    <label for="fileInput" class="file-label">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <span>Click to select file or drag and drop</span>
+                                    </label>
+                                </div>
+                                <p class="file-hint">Supported formats: CSV, JSON | Max size: 50MB</p>
+                            </div>
 
-                        <div class="form-actions">
-                            <button class="btn-primary" id="uploadBtn" disabled>
-                                <i class="fas fa-upload"></i> Upload Dataset
-                            </button>
+                            <div class="form-group">
+                                <label for="siteSelect">Monitoring Site:</label>
+                                <select id="siteSelect">
+                                    <option value="">Select Site</option>
+                                    <option value="north">North Braybrook</option>
+                                    <option value="central">Central Braybrook</option>
+                                    <option value="south">South Braybrook</option>
+                                    <option value="east">East Braybrook</option>
+                                    <option value="west">West Braybrook</option>
+                                </select>
+                            </div>
+
+                            <div class="form-actions">
+                                <button class="btn-primary" id="uploadBtn" disabled>
+                                    <i class="fas fa-upload"></i> Upload Dataset
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Upload Progress Section -->
-            <div id="uploadProgress" style="display:none;" class="progress-section">
-                <h2>Upload Progress</h2>
-                <div class="progress-bar">
-                    <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+                <!-- Upload Progress Section -->
+                <div id="uploadProgress" style="display:none;" class="progress-section">
+                    <h2>Upload Progress</h2>
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+                    </div>
+                    <p id="progressText" style="text-align: center; margin-top: 10px; font-weight: bold;">Uploading... 0%</p>
                 </div>
-                <p id="progressText" style="text-align: center; margin-top: 10px; font-weight: bold;">Uploading... 0%</p>
-            </div>
 
-            <!-- Upload Results Table Section -->
-            <div id="uploadResults" style="display:none;" class="results-section">
-                <h2>Upload History</h2>
-                <div class="table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>File Name</th>
-                                <th>Dataset Type</th>
-                                <th>Site</th>
-                                <th>Upload Time</th>
-                                <th>Status</th>
-                                <th>S3 Path</th>
-                                <th>Message</th>
-                            </tr>
-                        </thead>
-                        <tbody id="resultsTableBody">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
+                <!-- Upload Results Table Section -->
+                <div id="uploadResults" style="display:none;" class="results-section">
+                    <h2>Upload History</h2>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Dataset Type</th>
+                                    <th>Site</th>
+                                    <th>Upload Time</th>
+                                    <th>Status</th>
+                                    <th>S3 Path</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsTableBody">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Instructions Section -->
-            <div class="instructions-section">
-                <h2>Upload Instructions</h2>
-                <div class="instruction-card">
-                    <h3><i class="fas fa-file-csv"></i> CSV Format Requirements</h3>
+                <!-- Instructions Section -->
+                <div class="instructions-section">
+                    <h2>Upload Instructions</h2>
+                    <div class="instruction-card">
+                        <h3><i class="fas fa-file-csv"></i> CSV Format Requirements</h3>
+                        <ul>
+                            <li>First row must contain headers</li>
+                            <li>For air quality: timestamp, site, PM2.5, NO₂, CO₂, temperature</li>
+                            <li>For noise: timestamp, site, noise_level, frequency</li>
+                            <li>For weather: timestamp, site, temperature, humidity, wind_speed</li>
+                            <li>For traffic: timestamp, site, vehicle_count, average_speed</li>
+                            <li>Timestamp format: YYYY-MM-DD HH:MM:SS</li>
+                        </ul>
+                    </div>
+
+                    <div class="instruction-card">
+                        <h3><i class="fas fa-code"></i> JSON Format Requirements</h3>
+                        <ul>
+                            <li>Must be an array of objects</li>
+                            <li>Each object must have a timestamp field</li>
+                            <li>Include all relevant measurement fields based on dataset type</li>
+                            <li>Example: <code>[{"timestamp": "2025-05-20 10:00:00", "PM2.5": 32, ...}]</code></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- API Integration Notes -->
+                <div class="api-notes">
+                    <h3><i class="fas fa-info-circle"></i> Backend Integration</h3>
+                    <p><strong>This system is connected to a real AWS backend with presigned S3 URLs and Cognito authentication.</strong></p>
                     <ul>
-                        <li>First row must contain headers</li>
-                        <li>For air quality: timestamp, site, PM2.5, NO₂, CO₂, temperature</li>
-                        <li>For noise: timestamp, site, noise_level, frequency</li>
-                        <li>For weather: timestamp, site, temperature, humidity, wind_speed</li>
-                        <li>For traffic: timestamp, site, vehicle_count, average_speed</li>
-                        <li>Timestamp format: YYYY-MM-DD HH:MM:SS</li>
+                        <li>API Endpoint: <code>https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/generate-upload-url</code></li>
+                        <li>Authentication: AWS Cognito User Pool (us-east-1)</li>
+                        <li>Lambda generates presigned S3 upload URLs</li>
+                        <li>Files are directly uploaded to S3 via presigned URLs</li>
+                        <li>S3 path is returned and displayed in upload history</li>
+                        <li>Supports large file uploads with progress tracking</li>
                     </ul>
                 </div>
-
-                <div class="instruction-card">
-                    <h3><i class="fas fa-code"></i> JSON Format Requirements</h3>
-                    <ul>
-                        <li>Must be an array of objects</li>
-                        <li>Each object must have a timestamp field</li>
-                        <li>Include all relevant measurement fields based on dataset type</li>
-                        <li>Example: <code>[{"timestamp": "2025-05-20 10:00:00", "PM2.5": 32, ...}]</code></li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- API Integration Notes -->
-            <div class="api-notes">
-                <h3><i class="fas fa-info-circle"></i> Backend Integration</h3>
-                <p><strong>This system is now connected to a real backend with presigned S3 URLs!</strong></p>
-                <ul>
-                    <li>API Endpoint: <code>"https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/generate-upload-url"</code></li>
-                    <li>Lambda generates presigned S3 upload URLs</li>
-                    <li>Files are directly uploaded to S3 via presigned URLs</li>
-                    <li>S3 path is returned and displayed in upload history</li>
-                    <li>Supports large file uploads with progress tracking</li>
-                </ul>
             </div>
         </div>
     </main>
@@ -238,23 +277,160 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="container">
-            <p>&copy; 2025 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
+            <p>&copy; 2026 Smart Air and Noise Quality Monitoring System - Braybrook Environmental Initiative</p>
         </div>
     </footer>
 
-    <script src="js/main.js"></script>
     <script>
         // ============================================
-        // ADMIN UPLOAD PAGE JAVASCRIPT
+        // COGNITO CONFIG
         // ============================================
-        // Connected to real backend API with presigned URLs:
-        // Endpoint: https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/generate-upload-url
-        // ============================================
+        const COGNITO_CONFIG = {
+            UserPoolId: 'us-east-1_ozyjqrW4A',
+            ClientId: '4l2c22pf92vij4v6303te0p4u1'
+        };
 
+        const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO_CONFIG);
+        let currentUser = null;
+
+        // ============================================
+        // AUTH STATE MANAGEMENT
+        // ============================================
+        function checkAuthState() {
+            console.log('=== CHECKING AUTH STATE ===');
+            const cognitoUser = userPool.getCurrentUser();
+
+            if (!cognitoUser) {
+                console.log('No current user — showing auth gate.');
+                showLoggedOutState();
+                return;
+            }
+
+            cognitoUser.getSession((err, session) => {
+                if (err || !session || !session.isValid()) {
+                    console.log('Session invalid or expired — showing auth gate.', err);
+                    showLoggedOutState();
+                    return;
+                }
+                console.log('Valid session found.');
+                cognitoUser.getUserAttributes((attrErr, attrs) => {
+                    let email = cognitoUser.getUsername();
+                    if (!attrErr && attrs) {
+                        const emailAttr = attrs.find(a => a.Name === 'email');
+                        if (emailAttr) email = emailAttr.Value;
+                    }
+                    currentUser = { cognitoUser, email };
+                    showLoggedInState(email);
+                });
+            });
+        }
+
+        function showLoggedInState(email) {
+            document.getElementById('authGate').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+            document.getElementById('loginBtn').style.display = 'none';
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            const badge = document.getElementById('userBadge');
+            badge.textContent = email;
+            badge.style.display = 'inline-block';
+            closeLoginModal();
+        }
+
+        function showLoggedOutState() {
+            document.getElementById('authGate').style.display = 'block';
+            document.getElementById('adminContent').style.display = 'none';
+            document.getElementById('loginBtn').style.display = 'inline-block';
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('userBadge').style.display = 'none';
+            currentUser = null;
+        }
+
+        // ============================================
+        // LOGIN MODAL
+        // ============================================
+        function openLoginModal(event) {
+            if (event) event.preventDefault();
+            document.getElementById('loginModal').style.display = 'block';
+            document.getElementById('loginError').style.display = 'none';
+            setTimeout(() => document.getElementById('email').focus(), 100);
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').style.display = 'none';
+            document.getElementById('loginForm').reset();
+            document.getElementById('loginError').style.display = 'none';
+        }
+
+        // Close modal when clicking outside content
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('loginModal');
+            if (e.target === modal) closeLoginModal();
+        });
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('loginError');
+            const submitBtn = document.getElementById('loginSubmitBtn');
+
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+
+            const authDetails = new AmazonCognitoIdentity.AuthenticationDetails({
+                Username: email,
+                Password: password
+            });
+
+            const cognitoUser = new AmazonCognitoIdentity.CognitoUser({
+                Username: email,
+                Pool: userPool
+            });
+
+            cognitoUser.authenticateUser(authDetails, {
+                onSuccess: () => {
+                    console.log('=== LOGIN SUCCESS ===');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Login';
+                    checkAuthState();
+                },
+                onFailure: (err) => {
+                    console.error('=== LOGIN FAILED ===', err);
+                    let msg = err.message || 'Login failed';
+                    if (err.code === 'NotAuthorizedException') msg = 'Incorrect email or password.';
+                    else if (err.code === 'UserNotFoundException') msg = 'No account exists for this email.';
+                    else if (err.code === 'UserNotConfirmedException') msg = 'Account not confirmed. Contact the administrator.';
+                    errorDiv.textContent = msg;
+                    errorDiv.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Login';
+                },
+                newPasswordRequired: () => {
+                    errorDiv.textContent = 'Password change required. Contact the administrator.';
+                    errorDiv.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Login';
+                }
+            });
+        }
+
+        function logout(event) {
+            if (event) event.preventDefault();
+            const cognitoUser = userPool.getCurrentUser();
+            if (cognitoUser) {
+                cognitoUser.signOut();
+                console.log('=== USER SIGNED OUT ===');
+            }
+            showLoggedOutState();
+        }
+
+        // ============================================
+        // UPLOAD LOGIC (unchanged from previous version)
+        // ============================================
         const API_ENDPOINT = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/generate-upload-url';
         let selectedFile = null;
 
-        // File input handling
         const fileInput = document.getElementById('fileInput');
         const fileLabel = document.querySelector('.file-label');
 
@@ -269,7 +445,6 @@
             }
         });
 
-        // Drag and drop
         fileLabel.addEventListener('dragover', (e) => {
             e.preventDefault();
             fileLabel.style.backgroundColor = '#e3f2fd';
@@ -291,33 +466,22 @@
             }
         });
 
-        // Upload dataset
         document.getElementById('uploadBtn').addEventListener('click', async function() {
             console.log('=== UPLOAD BUTTON CLICKED ===');
-            
+
+            if (!currentUser) {
+                showStatus('You must be signed in to upload.', 'error');
+                openLoginModal();
+                return;
+            }
+
             const datasetType = document.getElementById('datasetType').value;
             const site = document.getElementById('siteSelect').value;
 
-            console.log('Dataset Type:', datasetType);
-            console.log('Site:', site);
-            console.log('File:', selectedFile);
+            if (!selectedFile) { showStatus('Please select a file', 'error'); return; }
+            if (!datasetType)  { showStatus('Please select a dataset type', 'error'); return; }
+            if (!site)         { showStatus('Please select a monitoring site', 'error'); return; }
 
-            if (!selectedFile) {
-                showStatus('Please select a file', 'error');
-                return;
-            }
-
-            if (!datasetType) {
-                showStatus('Please select a dataset type', 'error');
-                return;
-            }
-
-            if (!site) {
-                showStatus('Please select a monitoring site', 'error');
-                return;
-            }
-
-            // Show loading state
             const uploadBtn = document.getElementById('uploadBtn');
             const originalText = uploadBtn.innerHTML;
             uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
@@ -326,58 +490,29 @@
             showStatus('Starting upload process...', 'info');
 
             try {
-                console.log('Step 1: Requesting presigned URL...');
                 showStatus('Requesting presigned URL from server...', 'info');
-                
-                // Step 1: Get presigned URL from Lambda
-                const presignedURLData = await requestPresignedURL(
-                    selectedFile.name,
-                    datasetType,
-                    site,
-                    selectedFile.type
-                );
-
-                console.log('Presigned URL Response:', presignedURLData);
-
-                if (!presignedURLData || !presignedURLData.uploadUrl) {
-                    throw new Error('Failed to get presigned URL from server');
-                }
+                const presignedURLData = await requestPresignedURL(selectedFile.name, datasetType, site, selectedFile.type);
+                if (!presignedURLData || !presignedURLData.uploadUrl) throw new Error('Failed to get presigned URL from server');
 
                 showStatus('Got presigned URL! Uploading file to S3...', 'info');
-                console.log('Step 2: Uploading file to S3...');
+                await uploadFileToS3(selectedFile, presignedURLData.uploadUrl);
 
-                // Step 2: Upload file directly to S3
-                await uploadFileToS3(
-                    selectedFile,
-                    presignedURLData.uploadUrl
-                );
-
-                console.log('Step 3: Upload complete! Recording in history...');
                 showStatus('File uploaded successfully!', 'success');
 
-                // Step 3: Record upload
                 const uploadResult = {
                     fileName: selectedFile.name,
                     datasetType: getDatasetTypeLabel(datasetType),
                     site: site,
                     uploadTime: new Date().toLocaleString(),
                     status: 'Uploaded',
-                    s3Path: presignedURLData.s3Path || presignedURLData.fileKey || selectedFile.name,
+                    s3Path: presignedURLData.s3Path || presignedURLData.fileKey || presignedURLData.key || selectedFile.name,
                     message: 'Upload successful'
                 };
-
-                console.log('Upload Result:', uploadResult);
                 addUploadResult(uploadResult);
-                
                 showStatus('✓ Dataset uploaded successfully! S3 Path: ' + uploadResult.s3Path, 'success');
-
-                // Reset form
                 resetUploadForm();
             } catch (error) {
                 console.error('=== UPLOAD ERROR ===', error);
-                console.error('Error message:', error.message);
-                console.error('Error stack:', error.stack);
-                
                 showStatus('✗ Error during upload: ' + error.message, 'error');
             } finally {
                 uploadBtn.innerHTML = originalText;
@@ -385,127 +520,63 @@
             }
         });
 
-        // ============================================
-        // REQUEST PRESIGNED URL FROM LAMBDA
-        // ============================================
         async function requestPresignedURL(fileName, datasetType, site, fileType) {
-            try {
-                const requestBody = {
-                    fileName: fileName,
-                    fileType: fileType,
-                    datasetType: datasetType,
-                    site: site
-                };
-
-                console.log('Sending request to:', API_ENDPOINT);
-                console.log('Request body:', requestBody);
-
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestBody)
-                });
-
-                console.log('Response status:', response.status);
-                console.log('Response ok:', response.ok);
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('Error response:', errorText);
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-                }
-
-                const data = await response.json();
-                console.log('Presigned URL received:', data);
-                return data;
-            } catch (error) {
-                console.error('Error getting presigned URL:', error);
-                throw error;
+            const requestBody = { fileName, fileType, datasetType, site };
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestBody)
+            });
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
             }
+            return await response.json();
         }
 
-        // ============================================
-        // UPLOAD FILE DIRECTLY TO S3
-        // ============================================
         async function uploadFileToS3(file, presignedUrl) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-
                 reader.onprogress = (event) => {
                     if (event.lengthComputable) {
                         const percentComplete = (event.loaded / event.total) * 100;
-                        console.log('Upload progress:', percentComplete + '%');
                         updateProgress(percentComplete);
                     }
                 };
-
                 reader.onload = async function(e) {
                     try {
-                        console.log('File read complete, uploading to S3...');
-                        const fileContent = e.target.result;
-
                         const response = await fetch(presignedUrl, {
                             method: 'PUT',
-                            headers: {
-                                'Content-Type': file.type || 'text/csv'
-                            },
-                            body: fileContent
+                            headers: { 'Content-Type': file.type || 'text/csv' },
+                            body: e.target.result
                         });
-
-                        console.log('S3 response status:', response.status);
-
-                        if (!response.ok) {
-                            throw new Error(`S3 upload failed with status: ${response.status}`);
-                        }
-
+                        if (!response.ok) throw new Error(`S3 upload failed with status: ${response.status}`);
                         updateProgress(100);
-                        console.log('File uploaded to S3 successfully');
                         resolve();
-                    } catch (error) {
-                        console.error('S3 upload error:', error);
-                        reject(error);
-                    }
+                    } catch (error) { reject(error); }
                 };
-
-                reader.onerror = () => {
-                    const error = new Error('File reading error');
-                    console.error(error);
-                    reject(error);
-                };
-
-                console.log('Starting file read as ArrayBuffer...');
+                reader.onerror = () => reject(new Error('File reading error'));
                 reader.readAsArrayBuffer(file);
             });
         }
 
         function updateProgress(percent) {
-            const progressContainer = document.getElementById('uploadProgress');
-            progressContainer.style.display = 'block';
-            
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            
-            const roundedPercent = Math.round(percent);
-            progressFill.style.width = roundedPercent + '%';
-            progressFill.textContent = roundedPercent + '%';
-            progressText.textContent = 'Uploading... ' + roundedPercent + '%';
+            const c = document.getElementById('uploadProgress');
+            c.style.display = 'block';
+            const fill = document.getElementById('progressFill');
+            const text = document.getElementById('progressText');
+            const rounded = Math.round(percent);
+            fill.style.width = rounded + '%';
+            fill.textContent = rounded + '%';
+            text.textContent = 'Uploading... ' + rounded + '%';
         }
 
         function showStatus(message, type) {
-            const statusDiv = document.getElementById('statusMessage');
-            statusDiv.textContent = message;
-            statusDiv.className = 'status-message ' + type;
-            statusDiv.style.display = 'block';
-            console.log('[' + type.toUpperCase() + ']', message);
-            
-            // Auto-hide info messages after 5 seconds
-            if (type === 'info') {
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 5000);
-            }
+            const s = document.getElementById('statusMessage');
+            s.textContent = message;
+            s.className = 'status-message ' + type;
+            s.style.display = 'block';
+            if (type === 'info') setTimeout(() => { s.style.display = 'none'; }, 5000);
         }
 
         function getDatasetTypeLabel(value) {
@@ -521,7 +592,6 @@
         function addUploadResult(result) {
             const tbody = document.getElementById('resultsTableBody');
             const row = tbody.insertRow(0);
-
             row.innerHTML = `
                 <td>${result.fileName}</td>
                 <td>${result.datasetType}</td>
@@ -531,7 +601,6 @@
                 <td><code style="font-size: 11px; word-break: break-all;">${result.s3Path}</code></td>
                 <td>${result.message}</td>
             `;
-
             document.getElementById('uploadResults').style.display = 'block';
         }
 
@@ -543,16 +612,18 @@
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('datasetType').value = '';
             document.getElementById('siteSelect').value = '';
-            
-            // Hide progress
             document.getElementById('uploadProgress').style.display = 'none';
             document.getElementById('progressFill').style.width = '0%';
             document.getElementById('progressText').textContent = '0%';
         }
 
-        // Log when page loads
+        // ============================================
+        // BOOTSTRAP — runs once the page is loaded
+        // ============================================
         console.log('=== ADMIN UPLOAD PAGE LOADED ===');
         console.log('API Endpoint:', API_ENDPOINT);
+        console.log('Cognito Pool:', COGNITO_CONFIG.UserPoolId);
+        checkAuthState();
     </script>
 </body>
 </html>
