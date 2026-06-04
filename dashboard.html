@@ -1262,6 +1262,19 @@
         });
     });
 
+    // Collapsible sections — Chart.js canvases that render while collapsed come
+    // out zero-width, so resize them when their section is expanded.
+    function resizeCharts(instances) {
+        requestAnimationFrame(() => {
+            Object.values(instances).forEach(c => c && c.resize && c.resize());
+        });
+    }
+    document.getElementById('chartsCollapse').addEventListener('toggle', function () {
+        if (this.open) resizeCharts(chartInstances);
+    });
+    document.getElementById('forecastChartsCollapse').addEventListener('toggle', function () {
+        if (this.open) resizeCharts(forecastChartInstances);
+    });    
     console.log('Dashboard initialized');
     </script>
 </body>
