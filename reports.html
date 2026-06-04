@@ -6,6 +6,11 @@
     <title>Reports - Smart Air and Noise Quality Monitoring System</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .status-badge.status-verypoor { background-color:#f3d4d4; color:#7f0000; }
+        #benchmarkTable td.band-active { background-color:#eef6ef; font-weight:600; }
+        .benchmark-note { margin-top:14px; font-size:12px; color:#757575; line-height:1.5; }
+    </style>
 </head>
 <body>
     <!-- Navigation Bar -->
@@ -246,6 +251,85 @@
             aqi:   100,
             noise: 80    // dB(A)
         };
+
+        // ============================================
+        // BENCHMARK TABLE — period average vs AU/WHO standards
+        // bands = [GoodMax, ModerateMax, PoorMax]; above PoorMax = Very Poor.
+        // Anchored to 24-hour standards (see note rendered below the table).
+        // ============================================
+        const BENCHMARK = {
+            pm25:  { label: 'PM2.5', unit: 'μg/m³', bands: [15, 25, 50],      ref: 'WHO 24-hr 15 · AU NEPM 24-hr 25' },
+            no2:   { label: 'NO₂',   unit: 'ppb',   bands: [13, 40, 80],      ref: 'WHO 24-hr ≈13 · AU 1-hr 80' },
+            co2:   { label: 'CO₂',   unit: 'ppm',   bands: [800, 1000, 1500], ref: 'Indoor ventilation ref — no outdoor standard' },
+            noise: { label: 'Noise', unit: 'dB(A)', bands: [55, 65, 75],      ref: 'WHO road-traffic 53 dB Lden' }
+        };
+        const BENCHMARK_METRICS = {
+            'air-quality': ['pm25', 'no2', 'co2'],
+            'noise':       ['noise']
+        };
+
+        function benchmarkStatus(avg, bands) {
+            if (!isFinite(avg))   return { label: 'N/A',       cls: 'na',       idx: -1 };
+            if (avg <= bands[0])  return { label: 'Good',      cls: 'good',     idx: 0 };
+            if (avg <= bands[1])  return { label: 'Moderate',  cls: 'moderate', idx: 1 };
+            if (avg <= bands[2])  return { label: 'Poor',      cls: 'high',     idx: 2 };
+            return                       { label: 'Very Poor', cls: 'verypoor', idx: 3 };
+        }
+
+        function bandRanges(bands) {
+            return [`≤${bands[0]}`, `${bands[0]}–${bands[1]}`, `${bands[1]}–${bands[2]}`, `>${bands[2]}`];
+        }
+
+        // Build benchmark rows for the dataset; returned value is reused for CSV export.
+        function computeBenchmark(ds, datasetType) {
+            const cols = BENCHMARK_METRICS[datasetType] || [];
+            const rows = [];
+            for (const key of cols) {
+                const colName = ds.columnMap[key];
+                if (!colName) continue;
+                const vals = ds.rows.map(r => toNum(r[colName])).filter(isFinite);
+                if (!vals.length) continue;
+                const cfg = BENCHMARK[key];
+                const avg = mean(vals);
+                rows.push({
+                    label: cfg.label, unit: cfg.unit, ref: cfg.ref, avg,
+                    ranges: bandRanges(cfg.bands), status: benchmarkStatus(avg, cfg.bands)
+                });
+            }
+            return rows;
+        }
+
+        function renderBenchmark(ds, datasetType) {
+            const tbody = document.getElementById('benchmarkTableBody');
+            const note  = document.getElementById('benchmarkNote');
+            const rows  = computeBenchmark(ds, datasetType);
+
+            if (!rows.length) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#757575;">No benchmarkable metrics in this dataset.</td></tr>';
+                note.textContent = '';
+                return rows;
+            }
+
+            tbody.innerHTML = rows.map(r => {
+                const cells = r.ranges.map((range, i) =>
+                    `<td class="${i === r.status.idx ? 'band-active' : ''}">${range}</td>`
+                ).join('');
+                return `
+                    <tr>
+                        <td><strong>${r.label}</strong></td>
+                        <td>${r.avg.toFixed(1)} ${r.unit}</td>
+                        ${cells}
+                        <td><span class="status-badge status-${r.status.cls}">${r.status.label}</span></td>
+                    </tr>`;
+            }).join('');
+
+            note.innerHTML =
+                'Bands compare the <strong>period-average</strong> of each metric against air-quality reference levels. ' +
+                'PM2.5 and NO₂ are anchored to WHO 2021 and AU NEPM standards (24-hour guidelines), so a multi-day report average is an indicative benchmark rather than a strict regulatory comparison. ' +
+                'CO₂ has <em>no</em> ambient outdoor health standard — its bands use indoor-ventilation references (~800–1000 ppm), so outdoor readings (~420 ppm) normally sit in "Good". ' +
+                'Noise uses the WHO road-traffic guideline (53 dB L<sub>den</sub>), a day-evening-night average that differs from instantaneous dB(A) readings.';
+            return rows;
+        }
 
         // ============================================
         // SHARED HELPERS (mirrored from dashboard.html)
@@ -747,7 +831,7 @@
 
         function exportCSV() {
             if (!lastReportSnapshot) { alert('Generate a report first.'); return; }
-            const { filters, rowCount, analytics, summaryStats } = lastReportSnapshot;
+            const { filters, rowCount, analytics, summaryStats, benchmarkRows } = lastReportSnapshot;
             const lines = [];
 
             // --- HEADER ---
@@ -770,6 +854,16 @@
                 }
             }
             lines.push('');
+
+            // --- BENCHMARK VS STANDARDS ---
+            if (benchmarkRows && benchmarkRows.length) {
+                lines.push('# === BENCHMARK VS AU/WHO STANDARDS ===');
+                lines.push(['Metric','Period Avg','Good','Moderate','Poor','Very Poor','Status','Reference'].map(csvEscape).join(','));
+                for (const r of benchmarkRows) {
+                    lines.push([`${r.label} (${r.unit})`, r.avg.toFixed(1), r.ranges[0], r.ranges[1], r.ranges[2], r.ranges[3], r.status.label, r.ref].map(csvEscape).join(','));
+                }
+                lines.push('');
+            }
 
             // --- HIGH-RISK DAYS ---
             if (['air-quality', 'noise'].includes(filters.datasetType)) {
@@ -863,6 +957,7 @@
         // Card visibility per dataset type
         function showCardsForDataset(datasetType) {
             const cards = {
+                benchmarkCard: ['air-quality', 'noise'].includes(datasetType),
                 highRiskCard:  ['air-quality', 'noise'].includes(datasetType),
                 pollutionCard: datasetType === 'air-quality',
                 noiseCard:     datasetType === 'noise',
@@ -980,14 +1075,20 @@
                 }
 
                 // Compute summary statistics for the selected dataset
+                // Compute summary statistics for the selected dataset
                 const summaryStats = computeSummaryStats(filtered, datasetType);
+
+                // Benchmark table (air-quality / noise only)
+                const benchmarkRows = ['air-quality','noise'].includes(datasetType)
+                    ? renderBenchmark(filtered, datasetType) : [];
 
                 // Stash for CSV export — analytics, not raw rows
                 lastReportSnapshot = {
                     filters: { datasetType, site, startDate, endDate },
                     rowCount: filtered.rows.length,
                     analytics,
-                    summaryStats
+                    summaryStats,
+                    benchmarkRows
                 };
 
                 document.getElementById('reportSummary').style.display = 'block';
