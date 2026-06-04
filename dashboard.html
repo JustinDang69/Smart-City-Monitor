@@ -849,7 +849,12 @@
         ol.innerHTML = '';
         (data.suggestions || []).forEach(s => {
             const li = document.createElement('li');
-            li.textContent = s;
+            // Backend now returns {action, reference}; tolerate old string form too.
+            if (s && typeof s === 'object') {
+                li.innerHTML = `${s.action} <span style="display:block;font-size:12px;color:#6a1b9a;margin-top:3px;"><i class="fas fa-book"></i> Source: ${s.reference}</span>`;
+            } else {
+                li.textContent = s;
+            }
             ol.appendChild(li);
         });
 
