@@ -471,7 +471,7 @@
             ],
             charts: [
                 { title: 'Particulate Matter (PM2.5 & PM10)', cols: ['pm25','pm10'], unit: 'μg/m³', colors: ['#ff9f40','#36a2eb'] },
-                { title: 'Gases (NO₂ & CO₂)', cols: ['no2','co2'], unit: 'ppb / ppm', colors: ['#4bc0c0','#9966ff'] },
+                { title: 'Gases (NO₂ & CO₂)', cols: ['no2','co2'], unit: 'ppb / ppm', colors: ['#4bc0c0','#9966ff'], dualAxis: true, axisTitles: ['NO₂ (ppb)', 'CO₂ (ppm)'] },
                 { title: 'Temperature & Humidity', cols: ['temperature','humidity'], unit: '°C / %', colors: ['#ff6384','#ffcd56'] }
             ]
         },
@@ -568,19 +568,43 @@
                 </div>`;
         });
 
+        const timeUnit = state.aggregation === 'hour' ? 'hour' : state.aggregation === 'day' ? 'day' : state.aggregation === 'week' ? 'week' : 'month';
+
         // Build charts after DOM update
         setTimeout(() => {
             config.charts.forEach((chartCfg, idx) => {
                 const datasets = chartCfg.cols.map((col, i) => ({
-                    label: `${col.toUpperCase()} (${chartCfg.unit})`,
+                    label: chartCfg.dualAxis ? (chartCfg.axisTitles[i] || col.toUpperCase()) : `${col.toUpperCase()} (${chartCfg.unit})`,
                     data: aggregated.map(b => ({ x: b.datetime, y: b[col] })).filter(p => p.y !== null),
                     borderColor: chartCfg.colors[i],
                     backgroundColor: chartCfg.colors[i] + '20',
                     borderWidth: 2,
                     tension: 0.3,
                     pointRadius: aggregated.length > 100 ? 0 : 3,
-                    fill: false
+                    fill: false,
+                    // Dual-axis charts put each series on its own scale so a small-range
+                    // series (NO₂ ~11 ppb) isn't flattened by a large-range one (CO₂ ~425 ppm)
+                    yAxisID: chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y'
                 }));
+
+                // One shared Y axis normally; two independent axes when dualAxis is set
+                let yScales;
+                if (chartCfg.dualAxis) {
+                    yScales = {
+                        yLeft: {
+                            type: 'linear', position: 'left', beginAtZero: true,
+                            title: { display: true, text: chartCfg.axisTitles[0] }
+                        },
+                        yRight: {
+                            type: 'linear', position: 'right',
+                            beginAtZero: false,                 // CO₂ floors ~400 ppm; zero-basing reflattens it
+                            title: { display: true, text: chartCfg.axisTitles[1] },
+                            grid: { drawOnChartArea: false }    // hide right gridlines so they don't clash
+                        }
+                    };
+                } else {
+                    yScales = { y: { title: { display: true, text: chartCfg.unit }, beginAtZero: false } };
+                }
 
                 const ctx = document.getElementById(`chart_${idx}`);
                 chartInstances[`chart_${idx}`] = new Chart(ctx, {
@@ -594,13 +618,10 @@
                         scales: {
                             x: {
                                 type: 'time',
-                                time: {
-                                    unit: state.aggregation === 'hour' ? 'hour' : state.aggregation === 'day' ? 'day' : state.aggregation === 'week' ? 'week' : 'month',
-                                    tooltipFormat: 'PP'
-                                },
+                                time: { unit: timeUnit, tooltipFormat: 'PP' },
                                 title: { display: true, text: 'Time' }
                             },
-                            y: { title: { display: true, text: chartCfg.unit }, beginAtZero: false }
+                            ...yScales
                         }
                     }
                 });
