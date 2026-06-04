@@ -147,7 +147,7 @@
             <div class="stats-grid" id="statsGrid"></div>
 
             <!-- Charts Container (collapsible) -->
-            <details class="collapse-section" id="chartsCollapse">
+            <details class="collapse-section" id="chartsCollapse" style="display:none;">
                 <summary class="collapse-summary"><i class="fas fa-chart-line"></i> Charts <span class="collapse-hint">click to collapse</span></summary>
                 <div class="charts-container" id="chartsContainer"></div>
             </details>
@@ -218,7 +218,7 @@
                     </div>
                 </div>
                 <div id="thresholdAlerts"></div>
-                <details class="collapse-section" id="forecastChartsCollapse">
+                <details class="collapse-section" id="forecastChartsCollapse" style="display:none;">
                     <summary class="collapse-summary"><i class="fas fa-chart-area"></i> Forecast Charts <span class="collapse-hint">click to collapse</span></summary>
                     <div id="forecastCharts"></div>
                 </details>
@@ -362,6 +362,20 @@
 
             // Step 5: Render
             renderDashboard(filtered);
+
+            // Reveal + expand the collapsible chart sections now that data exists
+            const cc = document.getElementById('chartsCollapse');
+            cc.style.display = '';
+            cc.open = true;
+            resizeCharts(chartInstances);
+
+            const fcc = document.getElementById('forecastChartsCollapse');
+            if (fcc && document.getElementById('forecastSection').style.display !== 'none') {
+                fcc.style.display = '';
+                fcc.open = true;
+                resizeCharts(forecastChartInstances);
+            }
+
             showLoading(false);
         } catch (err) {
             console.error(err);
