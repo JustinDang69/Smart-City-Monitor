@@ -101,6 +101,30 @@
             <div id="reportSummary" class="report-summary" style="display:none;">
                 <h2>Report Summary</h2>
 
+                <!-- Benchmark vs AU/WHO Standards -->
+                <div class="report-card" id="benchmarkCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-clipboard-check"></i> Benchmark vs AU / WHO Standards</h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="report-table" id="benchmarkTable">
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Period Average</th>
+                                    <th>Good</th>
+                                    <th>Moderate</th>
+                                    <th>Poor</th>
+                                    <th>Very Poor</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="benchmarkTableBody"></tbody>
+                        </table>
+                        <p id="benchmarkNote" class="benchmark-note"></p>
+                    </div>
+                </div>
+
                 <!-- High Risk Days -->
                 <div class="report-card" id="highRiskCard">
                     <div class="card-header">
