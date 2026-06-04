@@ -721,16 +721,7 @@
         }
         section.classList.add('show');
 
-        // "All sites" can't be analysed — the Lambda needs a specific site to join
-        // air-quality + traffic + weather files together.
-        if (state.site === 'all') {
-            document.getElementById('causeLoading').style.display = 'none';
-            document.getElementById('causeContent').style.display = 'none';
-            document.getElementById('causeErrorText').textContent =
-                'Select a single monitoring site to see cause analysis (all-sites view aggregates data and cannot be correlated against traffic/weather).';
-            document.getElementById('causeError').style.display = 'block';
-            return;
-        }
+        
 
         const { startDate, endDate } = resolveDateRange();
         lastCauseArgs = { datasetType: state.datasetType, site: state.site, startDate, endDate };
@@ -752,7 +743,9 @@
             const resp = await fetch(url);
             if (!resp.ok) {
                 const body = await resp.text();
-                throw new Error(`HTTP ${resp.status}: ${body.slice(0, 200)}`);
+                let msg;
+                try { msg = JSON.parse(body).error || body; } catch { msg = body; }
+                throw new Error(msg.slice(0, 300));
             }
             const data = await resp.json();
             console.log('[cause] response', data);
