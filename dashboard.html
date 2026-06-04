@@ -146,11 +146,18 @@
             <!-- Stats Cards -->
             <div class="stats-grid" id="statsGrid"></div>
 
-            <!-- Charts Container -->
-            <div class="charts-container" id="chartsContainer"></div>
+            <!-- Charts Container (collapsible) -->
+            <details class="collapse-section" id="chartsCollapse" open>
+                <summary class="collapse-summary"><i class="fas fa-chart-line"></i> Charts <span class="collapse-hint">click to collapse</span></summary>
+                <div class="charts-container" id="chartsContainer"></div>
+            </details>
 
             <!-- Data Table -->
-            <div class="table-section" id="tableSection" style="display:none;">
+            <div class="table-section" id="tableSection" style="display:none<!-- Charts Container (collapsible) -->
+            <details class="collapse-section" id="chartsCollapse" open>
+                <summary class="collapse-summary"><i class="fas fa-chart-line"></i> Charts <span class="collapse-hint">click to collapse</span></summary>
+                <div class="charts-container" id="chartsContainer"></div>
+            </details>;">
                 <h2>Recent Measurements (latest 10 rows)</h2>
                 <div class="table-wrapper"><table class="data-table"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table></div>
             </div>
@@ -211,7 +218,10 @@
                     </div>
                 </div>
                 <div id="thresholdAlerts"></div>
-                <div id="forecastCharts"></div>
+                <details class="collapse-section" id="forecastChartsCollapse" open>
+                    <summary class="collapse-summary"><i class="fas fa-chart-area"></i> Forecast Charts <span class="collapse-hint">click to collapse</span></summary>
+                    <div id="forecastCharts"></div>
+                </details>
                 <div class="forecast-summary-grid" id="forecastSummary"></div>
             </div>
         </div>
