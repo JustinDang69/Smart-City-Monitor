@@ -1005,12 +1005,22 @@
         // Step 7: project forward — one point per day at noon
         const lastDate = dailySeries[dailySeries.length - 1].date;
         const lastIdx = dailySeries.length - 1;
+
+        // Damped linear trend (Holt's method): instead of extrapolating the fitted
+        // slope linearly forever — which makes a metric drift past its historical
+        // range on long horizons — each day forward adds LESS slope than the last.
+        // The d-step trend contribution is slope*(φ + φ² + … + φ^d) = slope*φ*(1-φ^d)/(1-φ),
+        // which converges to slope*φ/(1-φ), so the projected trend flattens to a plateau.
+        const PHI = 0.9;                   // damping factor (0<φ<1; lower flattens sooner)
+        const baseLevel = trend(lastIdx);  // fitted trend level at the end of history
+
         const predicted = [];
         for (let d = 1; d <= horizonDaysCount; d++) {
             const futureDate = new Date(lastDate);
             futureDate.setDate(lastDate.getDate() + d);
-            const futureIdx = lastIdx + d;
-            const trendVal = trend(futureIdx);
+            // Damped cumulative slope: φ + φ² + … + φ^d
+            const dampedTrendSteps = PHI * (1 - Math.pow(PHI, d)) / (1 - PHI);
+            const trendVal = baseLevel + slope * dampedTrendSteps;
             const dowVal = dowPattern[futureDate.getDay()] || 0;
             const hourVal = hourlyPattern[12] || 0;  // noon
             const predictedValue = trendVal + dowVal + hourVal;
