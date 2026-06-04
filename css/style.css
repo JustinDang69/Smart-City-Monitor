@@ -1507,3 +1507,22 @@ html, body {
         padding: 25px;
     }
 }
+
+.collapse-section { margin-bottom: 25px; }
+        .collapse-summary {
+            cursor: pointer; background: #fff; border-radius: 8px;
+            padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            font-size: 17px; font-weight: 600; color: #2e7d32;
+            list-style: none; display: flex; align-items: center; gap: 10px;
+            user-select: none;
+        }
+        .collapse-summary::-webkit-details-marker { display: none; }
+        .collapse-summary::before {
+            content: '\f078'; font-family: 'Font Awesome 6 Free'; font-weight: 900;
+            font-size: 13px; transition: transform 0.2s;
+        }
+        details[open] > .collapse-summary::before { transform: rotate(180deg); }
+        .collapse-summary:hover { background: #f0f7f4; }
+        .collapse-hint { font-size: 12px; color: #999; font-weight: 400; margin-left: auto; }
+        .collapse-section > .charts-container,
+        .collapse-section > #forecastCharts { margin-top: 16px; }
