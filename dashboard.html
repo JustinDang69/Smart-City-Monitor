@@ -138,8 +138,12 @@
                         <button class="control-pill" data-agg="month">Month</button>
                     </div>
                 </div>
-                <div>
+                <div style="display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
                     <button class="btn-primary" id="applyFilters" style="padding:10px 24px;">Apply Filters</button>
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:#555;">
+                        <input type="checkbox" id="benchmarkToggle" style="width:16px; height:16px; cursor:pointer;">
+                        Show WHO / AU benchmark lines
+                    </label>
                 </div>
             </div>
 
@@ -240,8 +244,10 @@
         range: '6m',
         aggregation: 'week',
         customStart: null,
-        customEnd: null
+        customEnd: null,
+        showBenchmarks: false   // benchmark lines off by default — charts stay zoomed on data
     };
+    let lastChartRows = null;   // cached so the benchmark toggle can re-render without re-fetching
     let chartInstances = {};
 
     // ============================================
@@ -576,6 +582,7 @@
     }
 
     function renderCharts(rows, config) {
+        lastChartRows = rows;   // cache for the benchmark toggle
         const container = document.getElementById('chartsContainer');
         container.innerHTML = '';
         // Destroy any old charts
@@ -617,10 +624,10 @@
                 }));
 
                 // Benchmark lines: one flat dashed line per pollutant that has a standard.
-                // Drawn on the same axis as its series. Tracks the highest line value
-                // per axis so Option-1 axis-capping can keep both line and data visible.
+                // Only built when the user toggles benchmarks on; otherwise benchMax stays
+                // empty and the axis-cap below returns undefined -> original clean auto-fit.
                 const benchMax = { y: -Infinity, yLeft: -Infinity, yRight: -Infinity };
-                chartCfg.cols.forEach((col, i) => {
+                if (state.showBenchmarks) chartCfg.cols.forEach((col, i) => {
                     const bm = CHART_BENCHMARKS[col];
                     if (!bm) return;  // no standard (e.g. CO₂) -> no line
                     const axisId = chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y';
@@ -653,10 +660,13 @@
                     }
                 });
                 const axisMax = (id) => {
-                    const d = dataMax[id], bm = benchMax[id];
-                    if (!isFinite(d) && !isFinite(bm)) return undefined;
-                    const hi = Math.max(isFinite(d) ? d : -Infinity, isFinite(bm) ? bm : -Infinity);
-                    return hi * 1.15;  // 15% headroom above the higher of data/line
+                    const bm = benchMax[id];
+                    // No benchmark line on this axis (toggle off, or CO₂) -> no cap,
+                    // Chart.js auto-fits to the data. This restores the clean charts.
+                    if (!isFinite(bm)) return undefined;
+                    const d = dataMax[id];
+                    const hi = Math.max(isFinite(d) ? d : bm, bm);
+                    return hi * 1.05;  // tight 5% headroom above the higher of data/line
                 };
 
                 // One shared Y axis normally; two independent axes when dualAxis is set
@@ -1345,7 +1355,17 @@
     });
     document.getElementById('forecastChartsCollapse').addEventListener('toggle', function () {
         if (this.open) resizeCharts(forecastChartInstances);
-    });    
+    });  
+
+    // Benchmark toggle — immediate re-render of just the charts, no re-fetch.
+    document.getElementById('benchmarkToggle').addEventListener('change', function () {
+        state.showBenchmarks = this.checked;
+        if (lastChartRows) {
+            renderCharts(lastChartRows, datasetConfigs[state.datasetType]);
+            resizeCharts(chartInstances);
+        }
+    });
+        
     console.log('Dashboard initialized');
     </script>
 </body>
