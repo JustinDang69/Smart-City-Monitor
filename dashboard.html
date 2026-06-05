@@ -477,6 +477,16 @@
         else if (type === 'month') { r.setDate(1); r.setHours(0,0,0,0); }
         return r;
     }
+        
+    // Per-pollutant benchmark lines (WHO/AU). Keyed by column name so the
+    // generic chart renderer can look up a line for whatever cols a chart has.
+    // CO₂ intentionally absent — no outdoor standard exists.
+    const CHART_BENCHMARKS = {
+        pm25:  { value: 25, label: 'AU NEPM 24-hr (25)',  color: '#ff9f40' },
+        pm10:  { value: 50, label: 'AU NEPM 24-hr (50)',  color: '#36a2eb' },
+        no2:   { value: 13, label: 'WHO 24-hr (≈13 ppb)', color: '#4bc0c0' },
+        noise: { value: 53, label: 'WHO road-traffic (53 dB)', color: '#ff6384' }
+    };
 
     // ============================================
     // DATASET CONFIGS — defines columns, units, thresholds per dataset type
@@ -606,23 +616,75 @@
                     yAxisID: chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y'
                 }));
 
+                // Benchmark lines: one flat dashed line per pollutant that has a standard.
+                // Drawn on the same axis as its series. Tracks the highest line value
+                // per axis so Option-1 axis-capping can keep both line and data visible.
+                const benchMax = { y: -Infinity, yLeft: -Infinity, yRight: -Infinity };
+                chartCfg.cols.forEach((col, i) => {
+                    const bm = CHART_BENCHMARKS[col];
+                    if (!bm) return;  // no standard (e.g. CO₂) -> no line
+                    const axisId = chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y';
+                    const span = aggregated.map(b => b.datetime).filter(Boolean);
+                    if (span.length < 2) return;
+                    datasets.push({
+                        label: bm.label,
+                        data: [{ x: span[0], y: bm.value }, { x: span[span.length - 1], y: bm.value }],
+                        borderColor: bm.color,
+                        borderDash: [8, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false,
+                        yAxisID: axisId,
+                        // Don't let the flat line join the index tooltip / spline maths
+                        tension: 0,
+                        order: 99
+                    });
+                    if (bm.value > benchMax[axisId]) benchMax[axisId] = bm.value;
+                });
+
+                // Data peak per axis, so we can cap the axis just above whichever is
+                // higher — the data or the benchmark line (Option 1). Keeps the line
+                // visible without the line stretching the axis and flattening the data.
+                const dataMax = { y: -Infinity, yLeft: -Infinity, yRight: -Infinity };
+                chartCfg.cols.forEach((col, i) => {
+                    const axisId = chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y';
+                    for (const b of aggregated) {
+                        if (b[col] != null && b[col] > dataMax[axisId]) dataMax[axisId] = b[col];
+                    }
+                });
+                const axisMax = (id) => {
+                    const d = dataMax[id], bm = benchMax[id];
+                    if (!isFinite(d) && !isFinite(bm)) return undefined;
+                    const hi = Math.max(isFinite(d) ? d : -Infinity, isFinite(bm) ? bm : -Infinity);
+                    return hi * 1.15;  // 15% headroom above the higher of data/line
+                };
+
                 // One shared Y axis normally; two independent axes when dualAxis is set
                 let yScales;
                 if (chartCfg.dualAxis) {
                     yScales = {
                         yLeft: {
                             type: 'linear', position: 'left', beginAtZero: true,
+                            max: axisMax('yLeft'),
                             title: { display: true, text: chartCfg.axisTitles[0] }
                         },
                         yRight: {
                             type: 'linear', position: 'right',
                             beginAtZero: false,                 // CO₂ floors ~400 ppm; zero-basing reflattens it
+                            // No benchMax on yRight (CO₂ has no line), so this stays data-driven
+                            max: axisMax('yRight'),
                             title: { display: true, text: chartCfg.axisTitles[1] },
                             grid: { drawOnChartArea: false }    // hide right gridlines so they don't clash
                         }
                     };
                 } else {
-                    yScales = { y: { title: { display: true, text: chartCfg.unit }, beginAtZero: false } };
+                    yScales = {
+                        y: {
+                            title: { display: true, text: chartCfg.unit },
+                            beginAtZero: false,
+                            max: axisMax('y')
+                        }
+                    };
                 }
 
                 const ctx = document.getElementById(`chart_${idx}`);
