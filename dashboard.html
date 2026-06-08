@@ -233,13 +233,13 @@
     <script src="js/main.js"></script>
     <script>
     window.onerror = function (msg, src, line, col, err) {
-    const box = document.createElement('div');
-    box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c62828;color:#fff;font-size:12px;padding:10px;z-index:99999;white-space:pre-wrap;max-height:50vh;overflow:auto;';
-    box.textContent = 'ERROR: ' + msg + '\nat line ' + line + ':' + col +
-        (err && err.stack ? '\n\n' + err.stack : '');
-    document.body.appendChild(box);
-    return false;
-};
+        const box = document.createElement('div');
+        box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c62828;color:#fff;font-size:12px;padding:10px;z-index:99999;white-space:pre-wrap;max-height:50vh;overflow:auto;';
+        box.textContent = 'ERROR: ' + msg + '\nat line ' + line + ':' + col +
+            (err && err.stack ? '\n\n' + err.stack : '');
+        document.body.appendChild(box);
+        return false;
+    };
     // ============================================
     // DASHBOARD — Two-step fetch, time-scale charts, auto-aggregation, analysis text
     // ============================================
