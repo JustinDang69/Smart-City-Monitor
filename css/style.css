@@ -1597,3 +1597,83 @@ html, body {
 .status-badge.status-verypoor { background-color:#f3d4d4; color:#7f0000; }
 #benchmarkTable td.band-active { background-color:#eef6ef; font-weight:600; }
 .benchmark-note { margin-top:14px; font-size:12px; color:#757575; line-height:1.5; }
+
+/* ============================================
+   ADMIN — moved from inline <style> in admin.html
+   ============================================ */
+
+.status-message {
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    display: none;
+    font-size: 14px;
+}
+.status-message.success {
+    background-color: #e8f5e9;
+    border-left: 4px solid #4caf50;
+    color: #2e7d32;
+}
+.status-message.error {
+    background-color: #ffebee;
+    border-left: 4px solid #d32f2f;
+    color: #c62828;
+}
+.status-message.info {
+    background-color: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    color: #1565c0;
+}
+.progress-section {
+    background-color: white;
+    border-radius: 8px;
+    padding: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 30px;
+}
+.progress-bar {
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    height: 25px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+.progress-fill {
+    background: linear-gradient(90deg, #4caf50, #2e7d32);
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+}
+/* Locked state for the upload section when not logged in */
+#authGate {
+    background-color: #fff3e0;
+    border-left: 4px solid #f57c00;
+    padding: 30px;
+    border-radius: 8px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+#authGate h2 {
+    color: #e65100;
+    margin-bottom: 15px;
+}
+#authGate p {
+    color: #424242;
+    margin-bottom: 20px;
+}
+#userBadge {
+    display: inline-block;
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    padding: 6px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-left: 12px;
+}
