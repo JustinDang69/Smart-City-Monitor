@@ -232,18 +232,7 @@
 
     <script src="js/main.js"></script>
     <script>
-    window.addEventListener('error', function (e) {
-        const err = e.error;
-        let stack = (err && err.stack) ? err.stack : '(no stack on error object)';
-        showErrBox('ERROR: ' + e.message + '\n\n' + stack);
-    });
     
-    function showErrBox(text) {
-        const box = document.createElement('div');
-        box.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#c62828;color:#fff;font-size:11px;padding:10px;z-index:99999;white-space:pre-wrap;max-height:60vh;overflow:auto;font-family:monospace;';
-        box.textContent = text;
-        document.body.appendChild(box);
-    }
     // ============================================
     // DASHBOARD — Two-step fetch, time-scale charts, auto-aggregation, analysis text
     // ============================================
@@ -367,7 +356,12 @@
             const allRows = [];
             for (const csvText of csvTexts) {
                 const rows = parseCSV(csvText);
-                allRows.push(...rows);
+                // Append row-by-row, NOT allRows.push(...rows). Spreading a large array
+                // as function arguments exceeds the engine's argument-count limit and
+                // throws "Maximum call stack size exceeded". Mobile browsers cap this
+                // far lower than desktop, so a large all-sites dataset crashes on phones
+                // while working fine on a laptop.
+                for (const row of rows) allRows.push(row);
             }
             console.log(`Combined ${allRows.length} total rows`);
 
@@ -1358,22 +1352,8 @@
 
     // Collapsible sections — Chart.js canvases that render while collapsed come
     // out zero-width, so resize them when their section is expanded.
-    let _resizeDepth = 0;
-    function resizeCharts(instances) {
-        _resizeDepth++;
-        if (_resizeDepth > 30) {
-            // We're clearly looping — capture the live stack and show it
-            showErrBox('LOOP in resizeCharts, depth ' + _resizeDepth + '\n\n' + new Error().stack);
-            _resizeDepth = 0;
-            return;  // break the loop so the page survives
-        }
-        requestAnimationFrame(() => {
-            Object.values(instances).forEach(c => c && c.resize && c.resize());
-            _resizeDepth--;
-        });
-    }
+   
     
-    /*
     function resizeCharts(instances) {
         requestAnimationFrame(() => {
             Object.values(instances).forEach(c => c && c.resize && c.resize());
@@ -1385,7 +1365,7 @@
     document.getElementById('forecastChartsCollapse').addEventListener('toggle', function () {
         if (this.open) resizeCharts(forecastChartInstances);
     });  
-    */
+    
     // Benchmark toggle — immediate re-render of just the charts, no re-fetch.
     document.getElementById('benchmarkToggle').addEventListener('change', function () {
         state.showBenchmarks = this.checked;
