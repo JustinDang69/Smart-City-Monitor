@@ -2,8 +2,6 @@
 // CHART INITIALIZATION & VISUALIZATION
 // ============================================
 // Uses Chart.js library for interactive charts
-// All data is mocked - future backend integration
-// will replace with real API data
 // ============================================
 
 // Chart color scheme (Environmental theme)
