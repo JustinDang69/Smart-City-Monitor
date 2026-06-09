@@ -1,0 +1,1146 @@
+
+    
+    // ============================================
+    // DASHBOARD — Two-step fetch, time-scale charts, auto-aggregation, analysis text
+    // ============================================
+    const LIST_FILES_API = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/list-files';
+    const ANALYZE_API    = 'https://il4psjqi16.execute-api.us-east-1.amazonaws.com/prod/analyze';
+
+    // State
+    let state = {
+        datasetType: 'air-quality',
+        site: 'all',
+        range: '6m',
+        aggregation: 'week',
+        customStart: null,
+        customEnd: null,
+        showBenchmarks: false   // benchmark lines off by default — charts stay zoomed on data
+    };
+    let lastChartRows = null;   // cached so the benchmark toggle can re-render without re-fetching
+    let chartInstances = {};
+
+    // ============================================
+    // PILL BUTTON HANDLERS
+    // ============================================
+    function setupPills(containerId, stateKey, callback) {
+        document.querySelectorAll(`#${containerId} .control-pill`).forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll(`#${containerId} .control-pill`).forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state[stateKey] = btn.dataset[stateKey] || btn.dataset.dataset || btn.dataset.site || btn.dataset.range || btn.dataset.agg;
+                if (callback) callback();
+            });
+        });
+    }
+
+    setupPills('datasetPills', 'datasetType');
+    setupPills('sitePills', 'site');
+    setupPills('rangePills', 'range', () => {
+        // Auto-fill date pickers with the resolved range (skip for 'custom' — user controls those)
+        if (state.range !== 'custom') {
+            const { startDate, endDate } = resolveDateRange();
+            document.getElementById('startDate').value = startDate;
+            document.getElementById('endDate').value = endDate;
+            state.customStart = startDate;
+            state.customEnd = endDate;
+        }
+        // Auto-pick default aggregation based on range
+        const defaultAgg = { '7d':'hour', '1m':'day', '3m':'day', '6m':'week', '1y':'week', 'all':'month', 'custom':'day' };
+        const def = defaultAgg[state.range];
+        if (def) {
+            document.querySelectorAll('#aggPills .control-pill').forEach(b => b.classList.toggle('active', b.dataset.agg === def));
+            state.aggregation = def;
+        }
+        updateAggDisabled();
+    });
+    setupPills('aggPills', 'aggregation');
+
+    function updateAggDisabled() {
+        // Disable aggregations that would produce too few/too many buckets
+        const days = rangeDays(state.range);
+        const buckets = { hour: days*24, day: days, week: days/7, month: days/30 };
+        document.querySelectorAll('#aggPills .control-pill').forEach(btn => {
+            const n = buckets[btn.dataset.agg];
+            btn.disabled = n < 3 || n > 1000;
+        });
+    }
+
+    function rangeDays(r) {
+        return { '7d':7, '1m':30, '3m':90, '6m':180, '1y':365, 'all':3650, 'custom': customDays() }[r];
+    }
+    function customDays() {
+        if (!state.customStart || !state.customEnd) return 30;
+        return Math.max(1, Math.round((new Date(state.customEnd) - new Date(state.customStart)) / 86400000));
+    }
+
+    function switchToCustomRange() {
+        state.range = 'custom';
+        document.querySelectorAll('#rangePills .control-pill').forEach(b => b.classList.toggle('active', b.dataset.range === 'custom'));
+        updateAggDisabled();
+    }
+    document.getElementById('startDate').addEventListener('change', e => { state.customStart = e.target.value; switchToCustomRange(); });
+    document.getElementById('endDate').addEventListener('change', e => { state.customEnd = e.target.value; switchToCustomRange(); });
+
+    // Initial setup — fill in date pickers with the default 6-month range
+    (function initDates() {
+        const { startDate, endDate } = resolveDateRange();
+        document.getElementById('startDate').value = startDate;
+        document.getElementById('endDate').value = endDate;
+        state.customStart = startDate;
+        state.customEnd = endDate;
+    })();
+    updateAggDisabled();
+
+    // ============================================
+    // APPLY FILTERS — Main entry
+    // ============================================
+    document.getElementById('applyFilters').addEventListener('click', async () => {
+        showLoading('Fetching file list...');
+        hideError();
+        try {
+            const { startDate, endDate } = resolveDateRange();
+            console.log('Filters:', { ...state, startDate, endDate });
+
+            // Step 1: List matching files
+            const listUrl = `${LIST_FILES_API}?datasetType=${state.datasetType}&site=${state.site}&startDate=${startDate}&endDate=${endDate}`;
+            const listRes = await fetch(listUrl);
+            if (!listRes.ok) throw new Error(`list-files HTTP ${listRes.status}`);
+            const { files } = await listRes.json();
+            console.log(`Found ${files.length} matching files`);
+
+            if (files.length === 0) {
+                showLoading(false);
+                renderEmpty(`No ${state.datasetType} data found for site "${state.site}" in the selected period.`);
+                return;
+            }
+
+            // Step 2: Fetch all CSVs in parallel
+            showLoading(`Downloading ${files.length} file${files.length>1?'s':''}...`);
+            const csvTexts = await Promise.all(files.map(f => fetch(f.url).then(r => r.text())));
+
+            // Step 3: Combine rows
+            showLoading('Processing data...');
+            const allRows = [];
+            for (const csvText of csvTexts) {
+                const rows = parseCSV(csvText);
+                // Append row-by-row, NOT allRows.push(...rows). Spreading a large array
+                // as function arguments exceeds the engine's argument-count limit and
+                // throws "Maximum call stack size exceeded". Mobile browsers cap this
+                // far lower than desktop, so a large all-sites dataset crashes on phones
+                // while working fine on a laptop.
+                for (const row of rows) allRows.push(row);
+            }
+            console.log(`Combined ${allRows.length} total rows`);
+
+            // Step 4: Filter to date range, sort by datetime
+            const filtered = filterByDateRange(allRows, startDate, endDate);
+            filtered.sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+            // Step 5: Render
+            renderDashboard(filtered);
+
+            // Reveal + expand the collapsible chart sections now that data exists
+            const cc = document.getElementById('chartsCollapse');
+            cc.style.display = '';
+            cc.open = true;
+            resizeCharts(chartInstances);
+
+            const fcc = document.getElementById('forecastChartsCollapse');
+            if (fcc && document.getElementById('forecastSection').style.display !== 'none') {
+                fcc.style.display = '';
+                fcc.open = true;
+                resizeCharts(forecastChartInstances);
+            }
+
+            showLoading(false);
+        } catch (err) {
+            console.error(err);
+            showError(err.message);
+            showLoading(false);
+        }
+    });
+
+    function resolveDateRange() {
+        if (state.range === 'custom') {
+            return { startDate: state.customStart || '2024-01-01', endDate: state.customEnd || new Date().toISOString().slice(0,10) };
+        }
+        const end = new Date();
+        const start = new Date();
+        const days = rangeDays(state.range);
+        start.setDate(end.getDate() - days);
+        return { startDate: start.toISOString().slice(0,10), endDate: end.toISOString().slice(0,10) };
+    }
+
+    // ============================================
+    // CSV PARSING
+    // ============================================
+    function parseCSV(text) {
+        const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l => l.trim());
+        if (lines.length < 2) return [];
+        let headers = lines[0].split(',').map(h => h.trim());
+
+        // Normalize headers: map common variations to canonical names
+        headers = headers.map(h => {
+            const lower = h.toLowerCase();
+            if (lower === 'date' || lower === 'date (australia/sydney)' || lower === 'date_australia_sydney') return 'datetime';
+            if (lower === 'pm2_5' || lower === 'pm2.5') return 'pm25';
+            if (lower === 'sound') return 'noise';
+            return lower;
+        });
+
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',');
+            if (values.length !== headers.length) continue;
+            const row = {};
+            headers.forEach((h, idx) => {
+                let v = (values[idx] || '').trim();
+                // Strip timezone offsets from datetime values
+                if (h === 'datetime' && v) {
+                    v = v.replace(/[+-]\d{2}:\d{2}$/, '').trim();
+                }
+                row[h] = v === '' ? null : (isNaN(v) ? v : parseFloat(v));
+            });
+            rows.push(row);
+        }
+        return rows;
+    }
+
+    function filterByDateRange(rows, startDate, endDate) {
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T23:59:59');
+        return rows.filter(r => {
+            if (!r.datetime) return false;
+            const d = new Date(r.datetime);
+            return !isNaN(d.getTime()) && d >= start && d <= end;
+        });
+    }
+
+    // ============================================
+    // AGGREGATION
+    // ============================================
+    function aggregateData(rows, columns, bucketType) {
+        const buckets = {};
+        for (const row of rows) {
+            if (!row.datetime) continue;
+            const d = new Date(row.datetime);
+            if (isNaN(d.getTime())) continue;
+            const key = bucketKey(d, bucketType);
+            if (!buckets[key]) buckets[key] = { datetime: bucketStartDate(d, bucketType), counts: {}, sums: {} };
+            for (const col of columns) {
+                const v = parseFloat(row[col]);
+                if (!isNaN(v)) {
+                    buckets[key].sums[col] = (buckets[key].sums[col] || 0) + v;
+                    buckets[key].counts[col] = (buckets[key].counts[col] || 0) + 1;
+                }
+            }
+        }
+        return Object.values(buckets).map(b => {
+            const out = { datetime: b.datetime };
+            for (const col of columns) out[col] = b.counts[col] ? b.sums[col] / b.counts[col] : null;
+            return out;
+        }).sort((a,b) => a.datetime - b.datetime);
+    }
+
+    function bucketKey(d, type) {
+        const y = d.getFullYear(), m = d.getMonth(), day = d.getDate(), h = d.getHours();
+        if (type === 'hour') return `${y}-${m}-${day}-${h}`;
+        if (type === 'day') return `${y}-${m}-${day}`;
+        if (type === 'week') { const w = new Date(d); w.setDate(d.getDate() - d.getDay()); return `${w.getFullYear()}-${w.getMonth()}-${w.getDate()}`; }
+        if (type === 'month') return `${y}-${m}`;
+    }
+    function bucketStartDate(d, type) {
+        const r = new Date(d);
+        if (type === 'hour') { r.setMinutes(0,0,0); }
+        else if (type === 'day') { r.setHours(0,0,0,0); }
+        else if (type === 'week') { r.setDate(d.getDate() - d.getDay()); r.setHours(0,0,0,0); }
+        else if (type === 'month') { r.setDate(1); r.setHours(0,0,0,0); }
+        return r;
+    }
+        
+    // Per-pollutant benchmark lines (WHO/AU). Keyed by column name so the
+    // generic chart renderer can look up a line for whatever cols a chart has.
+    // CO₂ intentionally absent — no outdoor standard exists.
+    const CHART_BENCHMARKS = {
+        pm25:  { value: 25, label: 'AU NEPM 24-hr (25)',  color: '#ff9f40' },
+        pm10:  { value: 50, label: 'AU NEPM 24-hr (50)',  color: '#36a2eb' },
+        no2:   { value: 13, label: 'WHO 24-hr (≈13 ppb)', color: '#4bc0c0' },
+        noise: { value: 53, label: 'WHO road-traffic (53 dB)', color: '#ff6384' }
+    };
+
+    // ============================================
+    // DATASET CONFIGS — defines columns, units, thresholds per dataset type
+    // ============================================
+    const datasetConfigs = {
+        'air-quality': {
+            kpis: [
+                { col: 'pm25', label: 'PM2.5', unit: 'μg/m³', threshold: { good: 25, mod: 75 } },
+                { col: 'pm10', label: 'PM10', unit: 'μg/m³', threshold: { good: 50, mod: 150 } },
+                { col: 'no2', label: 'NO₂', unit: 'ppb', threshold: { good: 40, mod: 100 } },
+                { col: 'co2', label: 'CO₂', unit: 'ppm', threshold: { good: 1000, mod: 2000 } }
+            ],
+            charts: [
+                { title: 'Particulate Matter (PM2.5 & PM10)', cols: ['pm25','pm10'], unit: 'μg/m³', colors: ['#ff9f40','#36a2eb'] },
+                { title: 'Gases (NO₂ & CO₂)', cols: ['no2','co2'], unit: 'ppb / ppm', colors: ['#4bc0c0','#9966ff'], dualAxis: true, axisTitles: ['NO₂ (ppb)', 'CO₂ (ppm)'] },
+            ]
+        },
+        'noise': {
+            kpis: [
+                { col: 'noise', label: 'Avg Noise', unit: 'dB(A)', threshold: { good: 65, mod: 80 } }
+            ],
+            charts: [
+                { title: 'Noise Level Over Time', cols: ['noise'], unit: 'dB(A)', colors: ['#ff6384'] }
+            ]
+        },
+        'weather': {
+            kpis: [
+                { col: 'temperature', label: 'Temperature', unit: '°C' },
+                { col: 'humidity', label: 'Humidity', unit: '%' },
+                { col: 'wind_speed', label: 'Wind Speed', unit: 'm/s' },
+                { col: 'rainfall', label: 'Rainfall', unit: 'mm' }
+            ],
+            charts: [
+                { title: 'Temperature & Humidity', cols: ['temperature','humidity'], unit: '°C / %', colors: ['#ff6384','#36a2eb'] },
+                { title: 'Wind & Rainfall', cols: ['wind_speed','rainfall'], unit: 'm/s / mm', colors: ['#4bc0c0','#9966ff'] }
+            ]
+        },
+        'traffic': {
+            kpis: [
+                { col: 'vehicle_count', label: 'Vehicle Count', unit: 'vehicles' },
+                { col: 'average_speed', label: 'Avg Speed', unit: 'km/h' }
+            ],
+            charts: [
+                { title: 'Traffic Volume', cols: ['vehicle_count'], unit: 'vehicles', colors: ['#4caf50'] },
+                { title: 'Average Speed', cols: ['average_speed'], unit: 'km/h', colors: ['#f44336'] }
+            ]
+        }
+    };
+
+    // ============================================
+    // RENDER DASHBOARD
+    // ============================================
+    function renderDashboard(rows) {
+        const config = datasetConfigs[state.datasetType];
+        if (!config) { renderEmpty('Unknown dataset type'); return; }
+
+        renderKPIs(rows, config);
+        renderCharts(rows, config);
+        renderTable(rows, config);
+        renderForecast(rows);
+        renderCauseAnalysis();  // Stage C — only acts for air-quality / noise; hides otherwise
+    }
+
+    function renderKPIs(rows, config) {
+        const grid = document.getElementById('statsGrid');
+        grid.innerHTML = '';
+        for (const kpi of config.kpis) {
+            const values = rows.map(r => parseFloat(r[kpi.col])).filter(v => !isNaN(v));
+            const avg = values.length ? values.reduce((a,b)=>a+b,0) / values.length : null;
+            let statusClass = 'good', statusText = 'N/A';
+            if (avg !== null) {
+                if (kpi.threshold) {
+                    if (avg <= kpi.threshold.good) { statusClass = 'good'; statusText = 'Good'; }
+                    else if (avg <= kpi.threshold.mod) { statusClass = 'moderate'; statusText = 'Moderate'; }
+                    else { statusClass = 'high'; statusText = 'High'; }
+                } else { statusText = 'Recorded'; }
+            } else { statusText = 'No data'; }
+            grid.innerHTML += `
+                <div class="stat-card">
+                    <div class="stat-header"><h3>${kpi.label}</h3><i class="fas fa-wind"></i></div>
+                    <div class="stat-value">${avg !== null ? avg.toFixed(1) : '—'}</div>
+                    <div class="stat-unit">${kpi.unit}</div>
+                    <div class="stat-status status-badge status-${statusClass}">${statusText}</div>
+                    <div class="stat-trend">Average across ${values.length} readings</div>
+                </div>`;
+        }
+    }
+
+    function renderCharts(rows, config) {
+        lastChartRows = rows;   // cache for the benchmark toggle
+        const container = document.getElementById('chartsContainer');
+        container.innerHTML = '';
+        // Destroy any old charts
+        Object.values(chartInstances).forEach(c => c && c.destroy && c.destroy());
+        chartInstances = {};
+
+        // Aggregate data once for all charts (using all needed columns)
+        const allCols = [...new Set(config.charts.flatMap(c => c.cols))];
+        const aggregated = aggregateData(rows, allCols, state.aggregation);
+
+        config.charts.forEach((chartCfg, idx) => {
+            const canvasId = `chart_${idx}`;
+            const analysisId = `analysis_${idx}`;
+            container.innerHTML += `
+                <div class="chart-wrapper">
+                    <h2>${chartCfg.title}</h2>
+                    <canvas id="${canvasId}"></canvas>
+                    <div class="chart-analysis" id="${analysisId}"></div>
+                </div>`;
+        });
+
+        const timeUnit = state.aggregation === 'hour' ? 'hour' : state.aggregation === 'day' ? 'day' : state.aggregation === 'week' ? 'week' : 'month';
+
+        // Build charts after DOM update
+        setTimeout(() => {
+            config.charts.forEach((chartCfg, idx) => {
+                const datasets = chartCfg.cols.map((col, i) => ({
+                    label: chartCfg.dualAxis ? (chartCfg.axisTitles[i] || col.toUpperCase()) : `${col.toUpperCase()} (${chartCfg.unit})`,
+                    data: aggregated.map(b => ({ x: b.datetime, y: b[col] })).filter(p => p.y !== null),
+                    borderColor: chartCfg.colors[i],
+                    backgroundColor: chartCfg.colors[i] + '20',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    pointRadius: aggregated.length > 100 ? 0 : 3,
+                    fill: false,
+                    // Dual-axis charts put each series on its own scale so a small-range
+                    // series (NO₂ ~11 ppb) isn't flattened by a large-range one (CO₂ ~425 ppm)
+                    yAxisID: chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y'
+                }));
+
+                // Benchmark lines: one flat dashed line per pollutant that has a standard.
+                // Only built when the user toggles benchmarks on; otherwise benchMax stays
+                // empty and the axis-cap below returns undefined -> original clean auto-fit.
+                const benchMax = { y: -Infinity, yLeft: -Infinity, yRight: -Infinity };
+                if (state.showBenchmarks) chartCfg.cols.forEach((col, i) => {
+                    const bm = CHART_BENCHMARKS[col];
+                    if (!bm) return;  // no standard (e.g. CO₂) -> no line
+                    const axisId = chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y';
+                    const span = aggregated.map(b => b.datetime).filter(Boolean);
+                    if (span.length < 2) return;
+                    datasets.push({
+                        label: bm.label,
+                        data: [{ x: span[0], y: bm.value }, { x: span[span.length - 1], y: bm.value }],
+                        borderColor: bm.color,
+                        borderDash: [8, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false,
+                        yAxisID: axisId,
+                        // Don't let the flat line join the index tooltip / spline maths
+                        tension: 0,
+                        order: 99
+                    });
+                    if (bm.value > benchMax[axisId]) benchMax[axisId] = bm.value;
+                });
+
+                // Data peak per axis, so we can cap the axis just above whichever is
+                // higher — the data or the benchmark line (Option 1). Keeps the line
+                // visible without the line stretching the axis and flattening the data.
+                const dataMax = { y: -Infinity, yLeft: -Infinity, yRight: -Infinity };
+                chartCfg.cols.forEach((col, i) => {
+                    const axisId = chartCfg.dualAxis ? (i === 0 ? 'yLeft' : 'yRight') : 'y';
+                    for (const b of aggregated) {
+                        if (b[col] != null && b[col] > dataMax[axisId]) dataMax[axisId] = b[col];
+                    }
+                });
+                const axisMax = (id) => {
+                    const bm = benchMax[id];
+                    // No benchmark line on this axis (toggle off, or CO₂) -> no cap,
+                    // Chart.js auto-fits to the data. This restores the clean charts.
+                    if (!isFinite(bm)) return undefined;
+                    const d = dataMax[id];
+                    const hi = Math.max(isFinite(d) ? d : bm, bm);
+                    return hi * 1.05;  // tight 5% headroom above the higher of data/line
+                };
+
+                // One shared Y axis normally; two independent axes when dualAxis is set
+                let yScales;
+                if (chartCfg.dualAxis) {
+                    yScales = {
+                        yLeft: {
+                            type: 'linear', position: 'left', beginAtZero: true,
+                            max: axisMax('yLeft'),
+                            title: { display: true, text: chartCfg.axisTitles[0] }
+                        },
+                        yRight: {
+                            type: 'linear', position: 'right',
+                            beginAtZero: false,                 // CO₂ floors ~400 ppm; zero-basing reflattens it
+                            // No benchMax on yRight (CO₂ has no line), so this stays data-driven
+                            max: axisMax('yRight'),
+                            title: { display: true, text: chartCfg.axisTitles[1] },
+                            grid: { drawOnChartArea: false }    // hide right gridlines so they don't clash
+                        }
+                    };
+                } else {
+                    yScales = {
+                        y: {
+                            title: { display: true, text: chartCfg.unit },
+                            beginAtZero: false,
+                            max: axisMax('y')
+                        }
+                    };
+                }
+
+                const ctx = document.getElementById(`chart_${idx}`);
+                chartInstances[`chart_${idx}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: { legend: { position: 'top' } },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { unit: timeUnit, tooltipFormat: 'PP' },
+                                title: { display: true, text: 'Time' }
+                            },
+                            ...yScales
+                        }
+                    }
+                });
+
+                // Analysis text
+                const analysisEl = document.getElementById(`analysis_${idx}`);
+                analysisEl.textContent = generateAnalysis(rows, chartCfg);
+                if (!chartCfg.cols.some(c => rows.some(r => !isNaN(parseFloat(r[c]))))) {
+                    analysisEl.classList.add('empty');
+                }
+            });
+        }, 50);
+    }
+
+    function generateAnalysis(rows, chartCfg) {
+        const parts = [];
+        for (const col of chartCfg.cols) {
+            const values = rows.map(r => parseFloat(r[col])).filter(v => !isNaN(v));
+            if (values.length === 0) { parts.push(`${col.toUpperCase()}: no data available.`); continue; }
+            const avg = values.reduce((a,b)=>a+b,0) / values.length;
+            // Use loop instead of Math.max(...values) — spread crashes on arrays >50k
+            let peak = -Infinity;
+            for (const v of values) if (v > peak) peak = v;
+            const peakRow = rows.find(r => parseFloat(r[col]) === peak);
+            const peakDate = peakRow && peakRow.datetime ? new Date(peakRow.datetime).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' }) : 'unknown date';
+            parts.push(`${col.toUpperCase()}: averaged ${avg.toFixed(1)} ${chartCfg.unit.split(' ')[0]}, peaking at ${peak.toFixed(1)} on ${peakDate}.`);
+        }
+        return parts.join(' ');
+    }
+
+    function renderTable(rows, config) {
+        const section = document.getElementById('tableSection');
+        const head = document.getElementById('tableHead');
+        const body = document.getElementById('tableBody');
+        if (rows.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        const displayCols = ['datetime', ...config.kpis.map(k => k.col)];
+        head.innerHTML = `<tr>${displayCols.map(c => `<th>${c}</th>`).join('')}</tr>`;
+        body.innerHTML = rows.slice(-10).reverse().map(r =>
+            `<tr>${displayCols.map(c => `<td>${c === 'datetime' ? (r[c] || '—') : (r[c] !== null && r[c] !== undefined && !isNaN(r[c]) ? parseFloat(r[c]).toFixed(1) : '—')}</td>`).join('')}</tr>`
+        ).join('');
+    }
+
+    function renderEmpty(msg) {
+        document.getElementById('statsGrid').innerHTML = '';
+        document.getElementById('chartsContainer').innerHTML = `<div class="empty-dataset">${msg}</div>`;
+        document.getElementById('tableSection').style.display = 'none';
+        document.getElementById('forecastSection').style.display = 'none';
+        document.getElementById('causeSection').classList.remove('show');
+    }
+
+    function showLoading(msg) {
+        const el = document.getElementById('dataLoading');
+        if (msg === false) { el.classList.remove('show'); return; }
+        document.getElementById('loadingMessage').textContent = msg;
+        el.classList.add('show');
+    }
+    function showError(msg) {
+        const el = document.getElementById('dataError');
+        document.getElementById('errorMessage').textContent = msg;
+        el.classList.add('show');
+    }
+    function hideError() { document.getElementById('dataError').classList.remove('show'); }
+
+    // ============================================================
+    // STAGE C — AI CAUSE ANALYSIS
+    // Calls /analyze for outcome datasets (air-quality, noise) and renders
+    // a correlation bar chart, scatter plot, explanation, and policy suggestions.
+    // Drivers (traffic, weather) are inputs only — section is hidden for them.
+    // ============================================================
+    const OUTCOME_DATASETS = new Set(['air-quality', 'noise']);
+    const DRIVER_LABELS = {
+        vehicle_count: 'Vehicle count',
+        average_speed: 'Avg vehicle speed (km/h)',
+        temperature:   'Temperature (°C)',
+        humidity:      'Humidity (%)',
+        wind_speed:    'Wind speed (m/s)',
+        rainfall:      'Rainfall (mm)',
+    };
+    const OUTCOME_LABELS = {
+        pm25:  'PM2.5 (μg/m³)',
+        no2:   'NO₂ (ppb)',
+        co2:   'CO₂ (ppm)',
+        noise: 'Noise level (dB(A))',
+    };
+    let causeChartInstances = { bar: null, scatter: null };
+    let lastCauseArgs = null;
+
+    // Called from renderDashboard after the main dashboard finishes.
+    function renderCauseAnalysis() {
+        const section = document.getElementById('causeSection');
+
+        // Only for outcome datasets.
+        if (!OUTCOME_DATASETS.has(state.datasetType)) {
+            section.classList.remove('show');
+            return;
+        }
+        section.classList.add('show');
+
+        
+
+        const { startDate, endDate } = resolveDateRange();
+        lastCauseArgs = { datasetType: state.datasetType, site: state.site, startDate, endDate };
+        fetchCauseAnalysis(state.datasetType, state.site, startDate, endDate);
+    }
+
+    async function fetchCauseAnalysis(datasetType, site, startDate, endDate) {
+        document.getElementById('causeLoading').style.display = 'block';
+        document.getElementById('causeError').style.display = 'none';
+        document.getElementById('causeContent').style.display = 'none';
+
+        const params = new URLSearchParams({ datasetType, site });
+        if (startDate) params.append('startDate', startDate);
+        if (endDate)   params.append('endDate', endDate);
+        const url = `${ANALYZE_API}?${params.toString()}`;
+
+        try {
+            console.log('[cause] fetching', url);
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                const body = await resp.text();
+                let msg;
+                try { msg = JSON.parse(body).error || body; } catch { msg = body; }
+                throw new Error(msg.slice(0, 300));
+            }
+            const data = await resp.json();
+            console.log('[cause] response', data);
+            renderCauseResult(data);
+        } catch (err) {
+            console.error('[cause] error', err);
+            document.getElementById('causeLoading').style.display = 'none';
+            document.getElementById('causeErrorText').textContent =
+                'Could not load cause analysis: ' + err.message;
+            document.getElementById('causeError').style.display = 'block';
+        }
+    }
+
+    function renderCauseResult(data) {
+        document.getElementById('causeLoading').style.display = 'none';
+        document.getElementById('causeError').style.display = 'none';
+        document.getElementById('causeContent').style.display = 'block';
+
+        renderCorrelationBar(data.correlations || []);
+        renderScatterForStrongest(data);
+        renderExplanationAndSuggestions(data);
+    }
+
+    function renderCorrelationBar(correlations) {
+        const top = [...correlations]
+            .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+            .slice(0, 6);
+
+        const labels = top.map(c => {
+            const out = (OUTCOME_LABELS[c.outcome] || c.outcome).split(' ')[0];
+            const drv = DRIVER_LABELS[c.driver] || c.driver;
+            return `${out} vs ${drv}`;
+        });
+        const values = top.map(c => c.r);
+        // Green = positive r, red = negative r — makes direction obvious at a glance.
+        const colors = values.map(v => v >= 0 ? 'rgba(76, 175, 80, 0.75)' : 'rgba(244, 67, 54, 0.75)');
+
+        if (causeChartInstances.bar) causeChartInstances.bar.destroy();
+        const ctx = document.getElementById('correlationBarChart');
+        causeChartInstances.bar = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{ label: 'Pearson r', data: values, backgroundColor: colors, borderWidth: 0 }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `r = ${ctx.parsed.x.toFixed(3)}` } }
+                },
+                scales: {
+                    x: { min: -1, max: 1, title: { display: true, text: 'Correlation (r)' } }
+                }
+            }
+        });
+    }
+
+    function renderScatterForStrongest(data) {
+        const correlations = data.correlations || [];
+        if (correlations.length === 0) return;
+        const strongest = [...correlations].sort((a, b) => Math.abs(b.r) - Math.abs(a.r))[0];
+
+        const outcomeBlock = (data.scatter || {})[strongest.outcome] || {};
+        const points = outcomeBlock[strongest.driver] || [];
+
+        document.getElementById('scatterTitle').textContent =
+            `${OUTCOME_LABELS[strongest.outcome] || strongest.outcome} vs ` +
+            `${DRIVER_LABELS[strongest.driver] || strongest.driver}  ` +
+            `(r=${strongest.r.toFixed(3)})`;
+
+        if (causeChartInstances.scatter) causeChartInstances.scatter.destroy();
+        const ctx = document.getElementById('causeScatterChart');
+        causeChartInstances.scatter = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Observations',
+                    data: points,
+                    backgroundColor: 'rgba(106, 27, 154, 0.45)',
+                    pointRadius: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { title: { display: true, text: DRIVER_LABELS[strongest.driver] || strongest.driver } },
+                    y: { title: { display: true, text: OUTCOME_LABELS[strongest.outcome] || strongest.outcome } }
+                }
+            }
+        });
+    }
+
+    function renderExplanationAndSuggestions(data) {
+        document.getElementById('causeExplanation').textContent =
+            data.explanation || '(no explanation returned)';
+
+        const ol = document.getElementById('causeSuggestions');
+        ol.innerHTML = '';
+        (data.suggestions || []).forEach(s => {
+            const li = document.createElement('li');
+            // Backend now returns {action, reference}; tolerate old string form too.
+            if (s && typeof s === 'object') {
+                li.innerHTML = `${s.action} <span style="display:block;font-size:12px;color:#6a1b9a;margin-top:3px;"><i class="fas fa-book"></i> Source: ${s.reference}</span>`;
+            } else {
+                li.textContent = s;
+            }
+            ol.appendChild(li);
+        });
+
+        document.getElementById('causeMeta').textContent =
+            `Source: ${data.insightSource || 'unknown'} · ${(data.correlations || []).length} correlations computed`;
+    }
+
+    document.getElementById('causeRetryBtn').addEventListener('click', () => {
+        if (!lastCauseArgs) return;
+        const { datasetType, site, startDate, endDate } = lastCauseArgs;
+        fetchCauseAnalysis(datasetType, site, startDate, endDate);
+    });
+
+    // ============================================================
+    // FORECASTING ENGINE
+    // ============================================================
+    // Method: Seasonal decomposition
+    //   Forecast(t) = Trend(t) + DailyPattern(hour) + WeeklyPattern(dayOfWeek)
+    //
+    // Steps:
+    //   1. Aggregate historical data to daily averages
+    //   2. Fit a linear trend through the daily series (least-squares)
+    //   3. Detrend: subtract trend from each historical point
+    //   4. Detect daily seasonality: average detrended value per hour-of-day
+    //   5. Detect weekly seasonality: average detrended value per day-of-week
+    //   6. Estimate confidence band from residual standard deviation
+    //   7. Project forward: for each future point, sum trend + daily + weekly patterns
+    // ============================================================
+
+    // Thresholds for alerts (WHO / AU standards)
+    const FORECAST_THRESHOLDS = {
+        pm25:  { value: 25,   unit: 'μg/m³', label: 'PM2.5' },
+        pm10:  { value: 50,   unit: 'μg/m³', label: 'PM10' },
+        no2:   { value: 100,  unit: 'ppb',   label: 'NO₂' },
+        co2:   { value: 1000, unit: 'ppm',   label: 'CO₂' },
+        noise: { value: 80,   unit: 'dB(A)', label: 'Noise' }
+    };
+
+    // Which columns to forecast for each dataset type
+    const FORECAST_METRICS = {
+        'air-quality': ['pm25', 'pm10', 'no2', 'co2'],
+        'noise':       ['noise'],
+        'weather':     ['temperature', 'humidity'],
+        'traffic':     ['vehicle_count', 'average_speed']
+    };
+
+    // Display labels & units for forecast metrics
+    const FORECAST_META = {
+        pm25:           { label: 'PM2.5',         unit: 'μg/m³', color: '#ff9f40' },
+        pm10:           { label: 'PM10',          unit: 'μg/m³', color: '#36a2eb' },
+        no2:            { label: 'NO₂',           unit: 'ppb',   color: '#4bc0c0' },
+        co2:            { label: 'CO₂',           unit: 'ppm',   color: '#9966ff' },
+        noise:          { label: 'Noise Level',   unit: 'dB(A)', color: '#ff6384' },
+        temperature:    { label: 'Temperature',   unit: '°C',    color: '#ff6384' },
+        humidity:       { label: 'Humidity',      unit: '%',     color: '#36a2eb' },
+        vehicle_count:  { label: 'Vehicle Count', unit: 'vehicles', color: '#4caf50' },
+        average_speed:  { label: 'Avg Speed',     unit: 'km/h',  color: '#f44336' }
+    };
+
+    // Convert horizon string to number of days
+    function horizonDays(h) { return { '7d': 7, '30d': 30, '3m': 90 }[h] || 7; }
+
+    // Linear regression: returns { slope, intercept } for y = slope*x + intercept
+    function linearRegression(xs, ys) {
+        const n = xs.length;
+        if (n < 2) return { slope: 0, intercept: ys[0] || 0 };
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        for (let i = 0; i < n; i++) {
+            sumX += xs[i]; sumY += ys[i];
+            sumXY += xs[i] * ys[i];
+            sumXX += xs[i] * xs[i];
+        }
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX) || 0;
+        const intercept = (sumY - slope * sumX) / n;
+        return { slope, intercept };
+    }
+
+    // Forecast one metric — returns { historical, predicted, confidence } or null if insufficient data
+    function forecastMetric(rows, col, horizonDaysCount) {
+        // Step 1: aggregate to daily means
+        const daily = {};
+        for (const r of rows) {
+            const v = parseFloat(r[col]);
+            if (!r.datetime || isNaN(v)) continue;
+            const d = new Date(r.datetime);
+            if (isNaN(d.getTime())) continue;
+            const key = d.toISOString().slice(0, 10);
+            if (!daily[key]) daily[key] = { sum: 0, count: 0, date: new Date(key + 'T12:00:00') };
+            daily[key].sum += v;
+            daily[key].count++;
+        }
+        const dailySeries = Object.values(daily)
+            .map(d => ({ date: d.date, value: d.sum / d.count }))
+            .sort((a, b) => a.date - b.date);
+
+        if (dailySeries.length < 7) return null;  // Not enough data to forecast
+
+        // Step 2: fit linear trend (x = day index, y = value)
+        const xs = dailySeries.map((_, i) => i);
+        const ys = dailySeries.map(d => d.value);
+        const { slope, intercept } = linearRegression(xs, ys);
+        const trend = i => slope * i + intercept;
+
+        // Step 3: detrend
+        const detrended = dailySeries.map((d, i) => ({ date: d.date, residual: d.value - trend(i) }));
+
+        // Step 4 & 5: detect daily (hour-of-day) and weekly (day-of-week) patterns from RAW rows
+        // We use raw rows for daily/weekly patterns because daily aggregation discards the hour info
+        const hourlyResiduals = {};   // hour (0-23) -> [residuals]
+        const dowResiduals = {};      // day-of-week (0-6) -> [residuals]
+        for (let i = 0; i < dailySeries.length; i++) {
+            const dayDate = dailySeries[i].date;
+            const dayKey = dayDate.toISOString().slice(0, 10);
+            const trendVal = trend(i);
+            // For weekly pattern, use daily residual against day-of-week
+            const dow = dayDate.getDay();
+            if (!dowResiduals[dow]) dowResiduals[dow] = [];
+            dowResiduals[dow].push(dailySeries[i].value - trendVal);
+        }
+        // For hourly pattern, scan raw rows
+        for (const r of rows) {
+            const v = parseFloat(r[col]);
+            if (!r.datetime || isNaN(v)) continue;
+            const d = new Date(r.datetime);
+            if (isNaN(d.getTime())) continue;
+            // Trend at this point requires finding day index — approximate using days since first date
+            const firstDate = dailySeries[0].date;
+            const dayIdx = Math.floor((d - firstDate) / 86400000);
+            const trendVal = trend(dayIdx);
+            const hour = d.getHours();
+            if (!hourlyResiduals[hour]) hourlyResiduals[hour] = [];
+            hourlyResiduals[hour].push(v - trendVal);
+        }
+        const avg = arr => arr && arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+        const hourlyPattern = {};
+        for (let h = 0; h < 24; h++) hourlyPattern[h] = avg(hourlyResiduals[h]);
+        const dowPattern = {};
+        for (let d = 0; d < 7; d++) dowPattern[d] = avg(dowResiduals[d]);
+
+        // Step 6: estimate residual standard deviation for confidence intervals
+        const allResiduals = dailySeries.map((d, i) => d.value - trend(i) - dowPattern[d.date.getDay()]);
+        const meanRes = avg(allResiduals);
+        const variance = allResiduals.reduce((s, r) => s + (r - meanRes) ** 2, 0) / Math.max(1, allResiduals.length - 1);
+        const stdDev = Math.sqrt(variance);
+
+        // Step 7: project forward — one point per day at noon
+        const lastDate = dailySeries[dailySeries.length - 1].date;
+        const lastIdx = dailySeries.length - 1;
+
+        // Damped linear trend (Holt's method): instead of extrapolating the fitted
+        // slope linearly forever — which makes a metric drift past its historical
+        // range on long horizons — each day forward adds LESS slope than the last.
+        // The d-step trend contribution is slope*(φ + φ² + … + φ^d) = slope*φ*(1-φ^d)/(1-φ),
+        // which converges to slope*φ/(1-φ), so the projected trend flattens to a plateau.
+        const PHI = 0.9;                   // damping factor (0<φ<1; lower flattens sooner)
+        const baseLevel = trend(lastIdx);  // fitted trend level at the end of history
+
+        const predicted = [];
+        for (let d = 1; d <= horizonDaysCount; d++) {
+            const futureDate = new Date(lastDate);
+            futureDate.setDate(lastDate.getDate() + d);
+            // Damped cumulative slope: φ + φ² + … + φ^d
+            const dampedTrendSteps = PHI * (1 - Math.pow(PHI, d)) / (1 - PHI);
+            const trendVal = baseLevel + slope * dampedTrendSteps;
+            const dowVal = dowPattern[futureDate.getDay()] || 0;
+            // No diurnal term: forecast points are daily (one per day) and the
+            // historical line plots DAILY MEANS. Adding a single hour-of-day offset
+            // (noon) biased every forecast above the daily-mean line — that was the
+            // jump to ~13. Daily forecast = trend + weekly seasonal.
+            const predictedValue = trendVal + dowVal;
+            // Confidence widens with sqrt(days ahead) — standard practice
+            const ciHalf = 1.96 * stdDev * Math.sqrt(1 + d / 30);
+            predicted.push({
+                date: futureDate,
+                value: predictedValue,
+                lower: predictedValue - ciHalf,
+                upper: predictedValue + ciHalf
+            });
+        }
+
+        return {
+            historical: dailySeries,    // [{date, value}]
+            predicted,                  // [{date, value, lower, upper}]
+            trendSlope: slope           // useful for analysis text
+        };
+    }
+
+    // ============================================================
+    // FORECAST RENDERING
+    // ============================================================
+    let forecastChartInstances = {};
+    let lastForecastRows = null;       // Cached so horizon buttons can re-forecast without re-fetching
+
+    function renderForecast(rows) {
+        lastForecastRows = rows;
+        const section = document.getElementById('forecastSection');
+        const metrics = FORECAST_METRICS[state.datasetType] || [];
+
+        if (rows.length < 7 || metrics.length === 0) {
+            section.style.display = 'none';
+            return;
+        }
+        section.style.display = '';
+
+        const horizon = getActiveHorizon();
+        const days = horizonDays(horizon);
+
+        // Compute forecasts for each metric
+        const forecasts = {};
+        for (const col of metrics) {
+            const f = forecastMetric(rows, col, days);
+            if (f) forecasts[col] = f;
+        }
+
+        if (Object.keys(forecasts).length === 0) {
+            document.getElementById('thresholdAlerts').innerHTML =
+                '<div class="threshold-alert ok"><i class="fas fa-info-circle"></i> Not enough data variation to generate a reliable forecast.</div>';
+            document.getElementById('forecastCharts').innerHTML = '';
+            document.getElementById('forecastSummary').innerHTML = '';
+            return;
+        }
+
+        renderThresholdAlerts(forecasts);
+        renderForecastCharts(forecasts);
+        renderForecastSummary(forecasts);
+    }
+
+    function getActiveHorizon() {
+        const active = document.querySelector('#horizonPills .control-pill.active');
+        return active ? active.dataset.horizon : '7d';
+    }
+
+    function renderThresholdAlerts(forecasts) {
+        const container = document.getElementById('thresholdAlerts');
+        const alerts = [];
+        for (const [col, fc] of Object.entries(forecasts)) {
+            const thr = FORECAST_THRESHOLDS[col];
+            if (!thr) continue;
+            // Find first day forecast value exceeds threshold
+            const breach = fc.predicted.find(p => p.value > thr.value);
+            const worstBreach = fc.predicted.find(p => p.lower > thr.value);  // High confidence
+            if (worstBreach) {
+                alerts.push({
+                    level: 'danger',
+                    text: `<strong>${thr.label}</strong> is very likely to exceed ${thr.value} ${thr.unit} on <strong>${worstBreach.date.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'short' })}</strong> (predicted ${worstBreach.value.toFixed(1)} ${thr.unit}).`
+                });
+            } else if (breach) {
+                alerts.push({
+                    level: 'warning',
+                    text: `<strong>${thr.label}</strong> may exceed ${thr.value} ${thr.unit} on <strong>${breach.date.toLocaleDateString('en-AU', { weekday:'long', day:'numeric', month:'short' })}</strong> (predicted ${breach.value.toFixed(1)} ${thr.unit}, but within uncertainty range).`
+                });
+            }
+        }
+        if (alerts.length === 0) {
+            container.innerHTML = '<div class="threshold-alert ok"><i class="fas fa-check-circle"></i> No threshold breaches predicted within the forecast horizon.</div>';
+        } else {
+            container.innerHTML = alerts.map(a =>
+                `<div class="threshold-alert ${a.level}"><i class="fas fa-${a.level === 'danger' ? 'exclamation-triangle' : 'exclamation-circle'}"></i> <div>${a.text}</div></div>`
+            ).join('');
+        }
+    }
+
+    function renderForecastCharts(forecasts) {
+        const container = document.getElementById('forecastCharts');
+        container.innerHTML = '';
+        // Destroy old forecast charts
+        Object.values(forecastChartInstances).forEach(c => c && c.destroy && c.destroy());
+        forecastChartInstances = {};
+
+        Object.entries(forecasts).forEach(([col, fc], idx) => {
+            const canvasId = `forecastChart_${idx}`;
+            const meta = FORECAST_META[col] || { label: col, unit: '', color: '#888' };
+            container.innerHTML += `
+                <div class="forecast-chart-wrapper">
+                    <h3>${meta.label} — Historical + Forecast</h3>
+                    <canvas id="${canvasId}"></canvas>
+                </div>`;
+        });
+
+        setTimeout(() => {
+            Object.entries(forecasts).forEach(([col, fc], idx) => {
+                const meta = FORECAST_META[col] || { label: col, unit: '', color: '#888' };
+                const histPoints     = fc.historical.map(h => ({ x: h.date, y: h.value }));
+                const forecastPoints = fc.predicted.map(p => ({ x: p.date, y: p.value }));
+                const upperPoints    = fc.predicted.map(p => ({ x: p.date, y: p.upper }));
+                const lowerPoints    = fc.predicted.map(p => ({ x: p.date, y: p.lower }));
+
+                const ctx = document.getElementById(`forecastChart_${idx}`);
+                forecastChartInstances[`fc_${idx}`] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: `Historical ${meta.label} (${meta.unit})`,
+                                data: histPoints,
+                                borderColor: meta.color,
+                                backgroundColor: meta.color + '20',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                pointRadius: histPoints.length > 60 ? 0 : 2,
+                                fill: false
+                            },
+                            {
+                                label: `Forecast ${meta.label}`,
+                                data: forecastPoints,
+                                borderColor: meta.color,
+                                backgroundColor: 'transparent',
+                                borderWidth: 2,
+                                borderDash: [6, 4],
+                                pointRadius: 0,
+                                tension: 0.3,
+                                fill: false
+                            },
+                            {
+                                label: 'Confidence (upper)',
+                                data: upperPoints,
+                                borderColor: meta.color + '60',
+                                backgroundColor: meta.color + '20',
+                                borderWidth: 0,
+                                pointRadius: 0,
+                                fill: '+1',
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Confidence (lower)',
+                                data: lowerPoints,
+                                borderColor: meta.color + '60',
+                                backgroundColor: 'transparent',
+                                borderWidth: 0,
+                                pointRadius: 0,
+                                fill: false,
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                                labels: { filter: item => !item.text.startsWith('Confidence') }
+                            }
+                        },
+                        scales: {
+                            x: { type: 'time', time: { unit: 'day', tooltipFormat: 'PP' }, title: { display: true, text: 'Date' } },
+                            y: { title: { display: true, text: meta.unit }, beginAtZero: false }
+                        }
+                    }
+                });
+            });
+        }, 50);
+    }
+
+    function renderForecastSummary(forecasts) {
+        const container = document.getElementById('forecastSummary');
+        const cards = [];
+        for (const [col, fc] of Object.entries(forecasts)) {
+            const meta = FORECAST_META[col] || { label: col, unit: '' };
+            const predValues = fc.predicted.map(p => p.value);
+            const avgPred = predValues.reduce((a,b) => a+b, 0) / predValues.length;
+            // Use loop instead of Math.max(...) for safety with large arrays
+            let peakPred = -Infinity;
+            for (const v of predValues) if (v > peakPred) peakPred = v;
+            const peakDay  = fc.predicted.find(p => p.value === peakPred);
+            const histAvg  = fc.historical.reduce((a,h) => a + h.value, 0) / fc.historical.length;
+            const change = ((avgPred - histAvg) / histAvg) * 100;
+            const trendArrow = fc.trendSlope > 0.01 ? '↑' : fc.trendSlope < -0.01 ? '↓' : '→';
+            const changeText = isFinite(change)
+                ? `${change >= 0 ? '+' : ''}${change.toFixed(1)}% vs historical avg`
+                : 'no comparison';
+
+            cards.push(`
+                <div class="forecast-summary-card">
+                    <h4>${meta.label} ${trendArrow}</h4>
+                    <div class="metric">
+                        <strong>Predicted avg:</strong> ${avgPred.toFixed(1)} ${meta.unit}<br>
+                        <strong>Predicted peak:</strong> ${peakPred.toFixed(1)} ${meta.unit}<br>
+                        <strong>Peak on:</strong> ${peakDay ? peakDay.date.toLocaleDateString('en-AU', { day:'numeric', month:'short' }) : '—'}<br>
+                        <small style="color:#666;">${changeText}</small>
+                    </div>
+                </div>
+            `);
+        }
+        container.innerHTML = cards.join('');
+    }
+
+    // Horizon pill handlers — recompute forecast without re-fetching data
+    document.querySelectorAll('#horizonPills .control-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#horizonPills .control-pill').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            if (lastForecastRows) renderForecast(lastForecastRows);
+        });
+    });
+
+    // Collapsible sections — Chart.js canvases that render while collapsed come
+    // out zero-width, so resize them when their section is expanded.
+   
+    
+    function resizeCharts(instances) {
+        requestAnimationFrame(() => {
+            Object.values(instances).forEach(c => c && c.resize && c.resize());
+        });
+    }
+    document.getElementById('chartsCollapse').addEventListener('toggle', function () {
+        if (this.open) resizeCharts(chartInstances);
+    });
+    document.getElementById('forecastChartsCollapse').addEventListener('toggle', function () {
+        if (this.open) resizeCharts(forecastChartInstances);
+    });  
+    
+    // Benchmark toggle — immediate re-render of just the charts, no re-fetch.
+    document.getElementById('benchmarkToggle').addEventListener('change', function () {
+        state.showBenchmarks = this.checked;
+        if (lastChartRows) {
+            renderCharts(lastChartRows, datasetConfigs[state.datasetType]);
+            resizeCharts(chartInstances);
+        }
+    });
+        
+    console.log('Dashboard initialized');
+  
