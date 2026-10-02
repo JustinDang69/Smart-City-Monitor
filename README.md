@@ -65,3 +65,48 @@ Smart-City-Monitor/
 │   └── admin.js
 ├── LICENSE
 └── README.md
+
+## Analytical Focus
+
+The project explores relationships between environmental factors including:
+
+- Air quality
+- Noise levels
+- Weather conditions
+- Traffic activity
+
+The broader goal was to investigate how environmental data can be combined and presented to support smart-city monitoring and analysis.
+
+## Skills Demonstrated
+
+- Data analysis
+- Data visualisation
+- JavaScript development
+- Dashboard development
+- Environmental data interpretation
+- Front-end development
+- User interface design
+- Translating project requirements into a working application
+
+## Project Context
+
+This project was completed as part of **IT Capstone Project 2** at Victoria University.
+
+It represents the implementation stage of a larger smart-city environmental monitoring project, following the planning and design work completed during IT Capstone Project 1.
+
+## Future Improvements
+
+- Integration with live environmental APIs
+- More advanced predictive analytics
+- Automated data ingestion
+- Additional air-quality and noise forecasting
+- Cloud deployment
+- Improved geographic visualisation
+- Real-time alerting
+
+## Author
+
+**Justin Dang**
+
+Bachelor of Data Science  
+Victoria University
