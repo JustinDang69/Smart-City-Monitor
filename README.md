@@ -85,7 +85,7 @@ The project began with research, requirements analysis and solution planning dur
 
 The architecture separates the **data-write path** from the **public read path**.
 
-Raw uploads are processed asynchronously through an event-driven AWS pipeline, while cleaned data is delivered separately to the dashboard through CloudFront. This prevents upload or processing problems from directly affecting the public visualisation layer. :chatgpt-content-reference{index="1"}
+Raw uploads are processed asynchronously through an event-driven AWS pipeline, while cleaned data is delivered separately to the dashboard through CloudFront. This prevents upload or processing problems from directly affecting the public visualisation layer.
 
 ---
 
@@ -138,7 +138,7 @@ Key processing stages include:
 - canonical schema generation
 - cleaning reports and audit information
 
-The pipeline automatically runs when new raw CSV files are uploaded. :chatgpt-content-reference{index="2"}
+The pipeline automatically runs when new raw CSV files are uploaded.
 
 ---
 
@@ -217,7 +217,7 @@ The system first performs statistical analysis rather than asking an LLM to gues
 
 Environmental datasets are aligned to common **10-minute time intervals**, allowing independently collected traffic, weather and pollution observations to be compared.
 
-The backend then calculates **Pearson correlation coefficients** between environmental outcomes and potential drivers. :chatgpt-content-reference{index="3"}
+The backend then calculates **Pearson correlation coefficients** between environmental outcomes and potential drivers.
 
 The resulting statistics are passed to an NVIDIA NIM-hosted large language model, which converts the measured relationships into a plain-language explanation and possible policy actions.
 
@@ -245,7 +245,7 @@ from
 
 **Natural-language interpretation** → assisted by the LLM.
 
-If the external AI service is unavailable, the application provides a fallback explanation rather than breaking the dashboard. :chatgpt-content-reference{index="4"}
+If the external AI service is unavailable, the application provides a fallback explanation rather than breaking the dashboard.
 
 ---
 
@@ -460,7 +460,7 @@ Current limitations include:
 - the backend currently operates in a single AWS region
 - authentication is focused primarily on administrative functionality
 
-These limitations also provide clear directions for future development. :chatgpt-content-reference{index="5"}
+These limitations also provide clear directions for future development.
 
 ---
 
@@ -495,5 +495,5 @@ The complete system was designed, implemented, tested, deployed and documented i
 
 **Justin Dang**
 
-Data Science  
+Bachelor of Data Science Student  
 Victoria University
